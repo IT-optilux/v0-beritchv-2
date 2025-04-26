@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { saveUserSession } from '@/lib/cookies';
+
 export function LoginForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -18,15 +22,28 @@ export function LoginForm() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
-    // Simulación de autenticación
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push("/dashboard")
-    }, 1500)
-  }
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, username, password);
+      const user = userCredential.user;
+      const idToken = await user.getIdToken();
+      const uid = user.uid;
+      saveUserSession(idToken, user.email!, uid);
+
+      router.push("/dashboard");
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        alert("Correo o contraseña incorrectos");
+      } else {
+        alert("Error al iniciar sesión: " + error.message);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

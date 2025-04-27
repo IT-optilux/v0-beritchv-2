@@ -15,6 +15,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 
+import { collection, addDoc } from "firebase/firestore";
+import { getUserSession } from '@/lib/cookies';
+import { db } from "@/lib/firebase";
+
+
 interface MachineFormProps {
   machine?: Machine
   isEditing?: boolean
@@ -28,6 +33,8 @@ export function MachineForm({ machine, isEditing = false, onClose, onSuccess }: 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [isLoadingInventory, setIsLoadingInventory] = useState(true)
+
+  const { email, uid } = getUserSession();
 
   useEffect(() => {
     const fetchInventoryItems = async () => {
@@ -53,6 +60,8 @@ export function MachineForm({ machine, isEditing = false, onClose, onSuccess }: 
     setIsSubmitting(true)
 
     const formData = new FormData(e.currentTarget)
+    console.log("Form Data:", Object.fromEntries(formData.entries()))
+    const resJson = Object.fromEntries(formData.entries())
 
     try {
       const result = isEditing ? await updateMachine(formData) : await createMachine(formData)
@@ -64,6 +73,22 @@ export function MachineForm({ machine, isEditing = false, onClose, onSuccess }: 
         })
 
         if (onSuccess) {
+          try {
+
+            if (email) {
+              const docRef = await addDoc(collection(db, "MachineReports"), {
+                ...resJson,
+                userId: uid,
+                userEmail: email,
+                createdAt: new Date(),
+              });
+
+              console.log("Reporte creado con ID:", docRef.id);
+            }
+          } catch (error) {
+            console.error("Error al crear el reporte: ", error);
+          }
+
           onSuccess()
         }
 

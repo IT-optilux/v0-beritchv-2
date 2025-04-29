@@ -1,38 +1,53 @@
-// Función para verificar si un usuario tiene permisos de administrador
-export async function isAdmin(user: any | null): Promise<boolean> {
+import { cookies } from "next/headers"
+import { auth } from "@/lib/firebase-admin"
+import type { User } from "@/types/users"
+import { ROLE_PERMISSIONS } from "@/types/users"
+
+// Función para verificar la sesión del usuario actual
+export async function getCurrentUser(): Promise<User | null> {
+  const sessionCookie = cookies().get("session")?.value
+
+  if (!sessionCookie) {
+    return null
+  }
+
   try {
-    // Implementación simplificada sin el módulo de usuarios
-    // En una implementación real, esto verificaría los claims del token de Firebase
-    return user?.role === "admin" || user?.admin === true
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    const userRecord = await auth.getUser(decodedClaims.uid)
+
+    // Obtener datos adicionales de Firestore si es necesario
+    // En este caso simplificado, solo usamos los datos de Auth
+    return {
+      uid: userRecord.uid,
+      email: userRecord.email || "",
+      displayName: userRecord.displayName || "",
+      firstName: decodedClaims.firstName || "",
+      lastName: decodedClaims.lastName || "",
+      role: decodedClaims.role || "invitado",
+      isActive: !userRecord.disabled,
+      lastLogin: userRecord.metadata.lastSignInTime || "",
+      createdAt: userRecord.metadata.creationTime || "",
+      photoURL: userRecord.photoURL || "",
+    }
   } catch (error) {
-    console.error("Error al verificar permisos de administrador:", error)
-    return false
+    console.error("Error al verificar sesión:", error)
+    return null
   }
 }
 
-// Función para verificar si un usuario tiene permisos para una acción específica
-export async function hasPermission(user: any | null, action: string): Promise<boolean> {
-  try {
-    if (!user) return false
+// Función para verificar si un usuario es administrador
+export async function isAdmin(user: User | null): Promise<boolean> {
+  if (!user) return false
+  return user.role === "admin"
+}
 
-    // Implementación simplificada sin el módulo de usuarios
-    // En una implementación real, esto verificaría los claims del token de Firebase
+// Función para verificar si un usuario tiene un permiso específico
+export async function hasPermission(user: User | null, permission: string): Promise<boolean> {
+  if (!user) return false
 
-    // Si el usuario es administrador, tiene todos los permisos
-    if (user.role === "admin" || user.admin === true) return true
+  // Los administradores tienen todos los permisos
+  if (user.role === "admin") return true
 
-    // Definir permisos básicos por rol
-    const permissions: Record<string, string[]> = {
-      supervisor: ["view_all", "edit_reports", "view_analytics"],
-      tecnico: ["view_machines", "edit_machines", "view_reports", "edit_reports"],
-      operador: ["view_machines", "view_reports", "create_reports"],
-      invitado: ["view_basic"],
-    }
-
-    // Verificar si el usuario tiene el permiso específico
-    return permissions[user.role]?.includes(action) || false
-  } catch (error) {
-    console.error(`Error al verificar permiso ${action}:`, error)
-    return false
-  }
+  // Verificar si el rol del usuario tiene el permiso específico
+  return ROLE_PERMISSIONS[user.role]?.includes(permission) || ROLE_PERMISSIONS[user.role]?.includes("all") || false
 }

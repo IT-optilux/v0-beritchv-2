@@ -66,8 +66,8 @@
     "@testing-library/react": "latest",
     "@testing-library/jest-dom": "latest",
     "@jest/globals": "latest",
-    "firebase-admin": "latest",
-    "firebase": "latest"
+    "firebase": "latest",
+    "firebase-admin": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

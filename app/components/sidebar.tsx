@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -14,6 +14,7 @@ import {
   PenToolIcon as Tool,
   Truck,
   Wrench,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -24,6 +25,23 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
   const [expanded, setExpanded] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    // Verificar si el usuario es administrador
+    const checkAdmin = async () => {
+      try {
+        const response = await fetch("/api/auth/check-admin")
+        const data = await response.json()
+        setIsAdmin(data.isAdmin)
+      } catch (error) {
+        console.error("Error al verificar permisos de administrador:", error)
+        setIsAdmin(false)
+      }
+    }
+
+    checkAdmin()
+  }, [])
 
   const mainNavItems = [
     {
@@ -57,6 +75,15 @@ export function Sidebar({ className }: SidebarProps) {
       icon: <Truck className="h-5 w-5" />,
     },
   ]
+
+  // Agregar el enlace de Usuarios solo si el usuario es administrador
+  if (isAdmin) {
+    mainNavItems.push({
+      title: "Usuarios",
+      href: "/dashboard/users",
+      icon: <Users className="h-5 w-5" />,
+    })
+  }
 
   const secondaryNavItems = [
     {

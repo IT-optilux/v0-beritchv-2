@@ -10,19 +10,24 @@ export async function GET() {
       return NextResponse.json({ isAdmin: false }, { status: 401 })
     }
 
-    // Verificar el token con Firebase Admin
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    try {
+      // Verificar el token con Firebase Admin
+      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
 
-    // Verificar si el usuario es administrador
-    const userRecord = await auth.getUser(decodedClaims.uid)
-    const customClaims = userRecord.customClaims || {}
+      // Verificar si el usuario es administrador
+      const userRecord = await auth.getUser(decodedClaims.uid)
+      const customClaims = userRecord.customClaims || {}
 
-    // Comprobar si el usuario tiene el rol de administrador
-    const isAdmin = customClaims.role === "admin"
+      // Comprobar si el usuario tiene el rol de administrador
+      const isAdmin = customClaims.role === "admin"
 
-    return NextResponse.json({ isAdmin })
+      return NextResponse.json({ isAdmin })
+    } catch (firebaseError) {
+      console.error("Error de Firebase:", firebaseError)
+      return NextResponse.json({ isAdmin: false, error: "Error de autenticación" }, { status: 401 })
+    }
   } catch (error) {
     console.error("Error verificando permisos de administrador:", error)
-    return NextResponse.json({ isAdmin: false }, { status: 401 })
+    return NextResponse.json({ isAdmin: false, error: "Error del servidor" }, { status: 500 })
   }
 }

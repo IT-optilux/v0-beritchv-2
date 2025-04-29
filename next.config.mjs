@@ -2,54 +2,29 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  images: {
-    domains: [
-      'firebasestorage.googleapis.com',
-      'lh3.googleusercontent.com',
-      'localhost'
-    ],
-    unoptimized: true,
-  },
-  experimental: {
-    serverActions: true,
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Optimizaciones para producción
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn'],
-    } : false,
+  images: {
+    domains: ['firebasestorage.googleapis.com'],
+    unoptimized: true,
   },
-  // Configuración de headers de seguridad
+  // Configuración para entorno de producción
+  productionBrowserSourceMaps: false, // Deshabilitar source maps en producción para mejor rendimiento
+  poweredByHeader: false, // Eliminar el header X-Powered-By por seguridad
+  compress: true, // Habilitar compresión gzip
+  // Configuración de headers de seguridad adicionales
   async headers() {
     return [
       {
         source: '/(.*)',
         headers: [
           {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
           },
         ],
       },

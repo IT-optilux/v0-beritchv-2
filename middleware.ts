@@ -11,12 +11,27 @@ const publicRoutes = ["/", "/login", "/register"]
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Add security headers
+  const response = NextResponse.next()
+
+  // Security headers
+  response.headers.set("X-Frame-Options", "DENY")
+  response.headers.set("X-Content-Type-Options", "nosniff")
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+  // Content Security Policy - adjust as needed for your application
+  response.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com;",
+  )
+
   // Verificar si la ruta actual requiere autenticación
   const requiresAuth = protectedRoutes.some((route) => pathname.startsWith(route))
 
   // Si no requiere autenticación, permitir el acceso
   if (!requiresAuth) {
-    return NextResponse.next()
+    return response
   }
 
   // Obtener el token de la cookie de sesión
@@ -32,7 +47,7 @@ export async function middleware(request: NextRequest) {
   try {
     // Verificar el token con Firebase Admin
     await auth.verifySessionCookie(sessionCookie, true)
-    return NextResponse.next()
+    return response
   } catch (error) {
     // Si el token no es válido, redirigir al login
     const url = new URL("/login", request.url)
@@ -49,6 +64,6 @@ export const config = {
      * 1. Archivos estáticos (_next/static, favicon.ico, etc.)
      * 2. Rutas de API (/api/*)
      */
-    "/((?!_next/static|_next/image|favicon.ico|api).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 }

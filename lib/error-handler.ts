@@ -1,56 +1,91 @@
-export type ErrorResponse = {
+/**
+ * Utility for consistent error handling across the application
+ */
+
+// Standard error response type
+export interface ErrorResponse {
   success: false
   message: string
   code?: string
-  details?: any
+  details?: unknown
 }
 
-export type SuccessResponse<T = any> = {
+// Success response type
+export interface SuccessResponse<T = unknown> {
   success: true
-  data: T
-  message?: string
+  message: string
+  data?: T
 }
 
-export type ApiResponse<T = any> = ErrorResponse | SuccessResponse<T>
+// Combined response type
+export type ApiResponse<T = unknown> = ErrorResponse | SuccessResponse<T>
 
 /**
- * Maneja errores en acciones del servidor de manera consistente
+ * Handles errors consistently across the application
+ * @param error The error to handle
+ * @param defaultMessage Default message to show if error doesn't have one
+ * @returns Standardized error response
  */
-export function handleServerError(error: unknown, context: string): ErrorResponse {
-  console.error(`Error en ${context}:`, error)
+export function handleError(error: unknown, defaultMessage = "Ha ocurrido un error inesperado"): ErrorResponse {
+  console.error("Error:", error)
 
+  // Firebase errors
+  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
+    const firebaseError = error as { code: string; message: string }
+
+    // Map common Firebase error codes to user-friendly messages
+    const errorMessages: Record<string, string> = {
+      "auth/email-already-in-use": "El correo electrónico ya está en uso",
+      "auth/invalid-email": "El correo electrónico no es válido",
+      "auth/user-not-found": "Usuario no encontrado",
+      "auth/wrong-password": "Contraseña incorrecta",
+      "auth/weak-password": "La contraseña es demasiado débil",
+      "auth/invalid-credential": "Credenciales inválidas",
+      "permission-denied": "No tienes permisos para realizar esta acción",
+    }
+
+    return {
+      success: false,
+      message: errorMessages[firebaseError.code] || firebaseError.message,
+      code: firebaseError.code,
+    }
+  }
+
+  // Standard Error objects
   if (error instanceof Error) {
     return {
       success: false,
-      message: `Error en ${context}: ${error.message}`,
-      code: "SERVER_ERROR",
-      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      message: error.message,
+      details: error.stack,
     }
   }
 
+  // String errors
+  if (typeof error === "string") {
+    return {
+      success: false,
+      message: error,
+    }
+  }
+
+  // Default case
   return {
     success: false,
-    message: `Error desconocido en ${context}`,
-    code: "UNKNOWN_ERROR",
+    message: defaultMessage,
+    details: error,
   }
 }
 
 /**
- * Wrapper para acciones del servidor que maneja errores automáticamente
+ * Creates a success response
+ * @param message Success message
+ * @param data Optional data to include
+ * @returns Standardized success response
  */
-export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
-  fn: T,
-  context: string,
-): (...args: Parameters<T>) => Promise<ApiResponse<Awaited<ReturnType<T>>>> {
-  return async (...args: Parameters<T>) => {
-    try {
-      const result = await fn(...args)
-      return {
-        success: true,
-        data: result,
-      }
-    } catch (error) {
-      return handleServerError(error, context)
-    }
+export function createSuccessResponse<T>(message: string, data?: T): SuccessResponse<T> {
+  return {
+    success: true,
+    message,
+    data,
   }
 }

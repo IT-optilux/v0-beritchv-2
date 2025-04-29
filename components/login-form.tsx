@@ -9,41 +9,65 @@ import { Eye, EyeOff, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-import { auth } from "@/lib/firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { saveUserSession } from '@/lib/cookies';
+import { loginUser } from "@/app/actions/users"
+import { useToast } from "@/hooks/use-toast"
 
 export function LoginForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const router = useRouter()
+  const { toast } = useToast()
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!username) newErrors.username = "El nombre de usuario es requerido"
+    if (!password) newErrors.password = "La contraseña es requerida"
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+    e.preventDefault()
+
+    if (!validateForm()) return
+
+    setIsLoading(true)
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, username, password);
-      const user = userCredential.user;
-      const idToken = await user.getIdToken();
-      const uid = user.uid;
-      saveUserSession(idToken, user.email!, uid);
+      const formData = new FormData()
+      formData.append("username", username)
+      formData.append("password", password)
 
-      router.push("/dashboard");
-    } catch (error: any) {
-      console.error(error);
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        alert("Correo o contraseña incorrectos");
+      const result = await loginUser(formData)
+
+      if (result.success) {
+        toast({
+          title: "Éxito",
+          description: "Inicio de sesión exitoso",
+        })
+        router.push("/dashboard")
       } else {
-        alert("Error al iniciar sesión: " + error.message);
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive",
+        })
       }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Ha ocurrido un error al iniciar sesión",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -53,11 +77,22 @@ export function LoginForm() {
           id="username"
           type="text"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => {
+            setUsername(e.target.value)
+            if (errors.username) setErrors({ ...errors, username: "" })
+          }}
           placeholder="Ingrese su usuario"
           required
           className="border-optilab-blue/30 focus-visible:ring-optilab-light"
+          aria-invalid={!!errors.username}
+          aria-describedby={errors.username ? "username-error" : undefined}
+          disabled={isLoading}
         />
+        {errors.username && (
+          <p id="username-error" className="text-sm text-red-500">
+            {errors.username}
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Contraseña</Label>
@@ -66,19 +101,32 @@ export function LoginForm() {
             id="password"
             type={showPassword ? "text" : "password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              if (errors.password) setErrors({ ...errors, password: "" })
+            }}
             placeholder="Ingrese su contraseña"
             required
             className="border-optilab-blue/30 pr-10 focus-visible:ring-optilab-light"
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? "password-error" : undefined}
+            disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            disabled={isLoading}
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
+        {errors.password && (
+          <p id="password-error" className="text-sm text-red-500">
+            {errors.password}
+          </p>
+        )}
       </div>
       <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
         {isLoading ? (

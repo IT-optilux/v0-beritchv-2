@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useCallback } from "react"
 import type { Machine, MachinePart } from "@/types"
-import { Plus, AlertTriangle, Settings, RefreshCw } from "lucide-react"
+import { Plus, AlertTriangle, Settings, RefreshCw, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,27 +32,29 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
   const [selectedPart, setSelectedPart] = useState<MachinePart | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const handleUpdateUsage = (part: MachinePart) => {
+  // Optimización: Usar useCallback para funciones de manejo de eventos
+  const handleUpdateUsage = useCallback((part: MachinePart) => {
     setSelectedPart(part)
     setIsUsageModalOpen(true)
-  }
+  }, [])
 
-  const handleReplacePart = (part: MachinePart) => {
+  const handleReplacePart = useCallback((part: MachinePart) => {
     setSelectedPart(part)
     setIsReplaceModalOpen(true)
-  }
+  }, [])
 
-  const handleDeletePart = (part: MachinePart) => {
+  const handleDeletePart = useCallback((part: MachinePart) => {
     setSelectedPart(part)
     setIsDeleteDialogOpen(true)
-  }
+  }, [])
 
   const confirmDeletePart = async () => {
     if (!selectedPart) return
 
+    const partToDelete = selectedPart // Capturar el valor actual
     setIsProcessing(true)
     try {
-      const result = await deleteMachinePart(selectedPart.id)
+      const result = await deleteMachinePart(partToDelete.id)
 
       if (result.success) {
         toast({
@@ -78,6 +82,7 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
     }
   }
 
+  // Funciones de utilidad para calcular colores basados en el uso
   const getStatusColor = (part: MachinePart) => {
     const usagePercentage = (part.currentUsage / part.maxUsage) * 100
     if (usagePercentage >= 100) return "text-red-500"
@@ -103,7 +108,11 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Piezas de Desgaste</h3>
-        <Button onClick={() => setIsAddModalOpen(true)} className="bg-optilab-blue hover:bg-optilab-blue/90">
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="bg-optilab-blue hover:bg-optilab-blue/90"
+          aria-label="Añadir nueva pieza de desgaste"
+        >
           <Plus className="mr-2 h-4 w-4" />
           Añadir Pieza
         </Button>
@@ -113,7 +122,12 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
         <Card>
           <CardContent className="flex h-32 flex-col items-center justify-center text-center">
             <p className="text-gray-500">No hay piezas de desgaste registradas para este equipo.</p>
-            <Button variant="link" onClick={() => setIsAddModalOpen(true)} className="mt-2 text-optilab-blue">
+            <Button
+              variant="link"
+              onClick={() => setIsAddModalOpen(true)}
+              className="mt-2 text-optilab-blue"
+              aria-label="Añadir una pieza de desgaste"
+            >
               Añadir una pieza de desgaste
             </Button>
           </CardContent>
@@ -131,7 +145,7 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-medium">{part.name}</CardTitle>
-                    {isCritical && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                    {isCritical && <AlertTriangle className="h-5 w-5 text-red-500" aria-label="Estado crítico" />}
                   </div>
                   <CardDescription>Instalada el {new Date(part.installationDate).toLocaleDateString()}</CardDescription>
                 </CardHeader>
@@ -146,7 +160,12 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
                     <Progress
                       value={usagePercentage}
                       className={`h-2 ${getProgressBgColor(part)}`}
-                      indicatorClassName={getProgressColor(part)}
+                      style={
+                        {
+                          "--progress-background": getProgressColor(part).replace("bg-", "var(--") + ")",
+                        } as React.CSSProperties
+                      }
+                      aria-label={`Progreso de uso: ${usagePercentage.toFixed(1)}%`}
                     />
                     <p className="text-xs text-gray-500">
                       {remainingUsage > 0
@@ -156,7 +175,13 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleUpdateUsage(part)} className="flex-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUpdateUsage(part)}
+                      className="flex-1"
+                      aria-label={`Registrar uso para ${part.name}`}
+                    >
                       <Settings className="mr-1 h-3 w-3" />
                       Registrar Uso
                     </Button>
@@ -165,9 +190,19 @@ export function MachinePartsTab({ machine, parts, onPartsChange }: MachinePartsT
                       size="sm"
                       onClick={() => handleReplacePart(part)}
                       className="flex-1"
+                      aria-label={`Reemplazar ${part.name}`}
                     >
                       <RefreshCw className="mr-1 h-3 w-3" />
                       Reemplazar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeletePart(part)}
+                      className="h-8 w-8 p-0"
+                      aria-label={`Eliminar ${part.name}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
                   </div>
                 </CardContent>

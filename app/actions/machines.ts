@@ -76,222 +76,345 @@ let machines: Machine[] = [
 
 let machineParts: MachinePart[] = []
 
+// Función de utilidad para manejar errores
+const handleActionError = (error: unknown, message: string) => {
+  console.error(`${message}:`, error)
+  return {
+    success: false,
+    message: "Ha ocurrido un error inesperado. Por favor, inténtelo de nuevo más tarde.",
+  }
+}
+
 export async function getMachines() {
-  return machines
+  try {
+    return machines
+  } catch (error) {
+    console.error("Error al obtener máquinas:", error)
+    return []
+  }
 }
 
 export async function getMachineById(id: number) {
-  return machines.find((machine) => machine.id === id)
+  try {
+    return machines.find((machine) => machine.id === id)
+  } catch (error) {
+    console.error(`Error al obtener máquina con ID ${id}:`, error)
+    return null
+  }
 }
 
 export async function createMachine(formData: FormData) {
-  const newMachine: Machine = {
-    id: machines.length > 0 ? Math.max(...machines.map((m) => m.id)) + 1 : 1,
-    name: formData.get("name") as string,
-    model: formData.get("model") as string,
-    serialNumber: formData.get("serialNumber") as string,
-    status: formData.get("status") as "Operativa" | "Mantenimiento" | "Inoperativa",
-    lastMaintenance: formData.get("lastMaintenance") as string,
-    nextMaintenance: formData.get("nextMaintenance") as string,
-    description: formData.get("description") as string,
-    location: formData.get("location") as string,
-    purchaseDate: formData.get("purchaseDate") as string,
-    manufacturer: formData.get("manufacturer") as string,
-  }
+  try {
+    const name = formData.get("name") as string
+    const model = formData.get("model") as string
+    const serialNumber = formData.get("serialNumber") as string
+    const status = formData.get("status") as "Operativa" | "Mantenimiento" | "Inoperativa"
+    const lastMaintenance = formData.get("lastMaintenance") as string
+    const nextMaintenance = formData.get("nextMaintenance") as string
 
-  // Agregar el ítem de inventario asociado si se proporciona
-  const itemInventarioAsociado = formData.get("item_inventario_asociado")
-  if (itemInventarioAsociado && itemInventarioAsociado !== "") {
-    newMachine.item_inventario_asociado = Number(itemInventarioAsociado)
-  }
+    // Validaciones básicas
+    if (!name || !model || !serialNumber || !status || !lastMaintenance || !nextMaintenance) {
+      return { success: false, message: "Todos los campos obligatorios deben ser completados" }
+    }
 
-  machines.push(newMachine)
-  revalidatePath("/dashboard/machines")
-  return { success: true, message: "Equipo creado exitosamente", machine: newMachine }
+    const newMachine: Machine = {
+      id: machines.length > 0 ? Math.max(...machines.map((m) => m.id)) + 1 : 1,
+      name,
+      model,
+      serialNumber,
+      status,
+      lastMaintenance,
+      nextMaintenance,
+      description: formData.get("description") as string,
+      location: formData.get("location") as string,
+      purchaseDate: formData.get("purchaseDate") as string,
+      manufacturer: formData.get("manufacturer") as string,
+    }
+
+    // Agregar el ítem de inventario asociado si se proporciona
+    const itemInventarioAsociado = formData.get("item_inventario_asociado")
+    if (itemInventarioAsociado && itemInventarioAsociado !== "none") {
+      newMachine.item_inventario_asociado = Number(itemInventarioAsociado)
+    }
+
+    machines.push(newMachine)
+    revalidatePath("/dashboard/machines")
+    return { success: true, message: "Equipo creado exitosamente", machine: newMachine }
+  } catch (error) {
+    return handleActionError(error, "Error al crear máquina")
+  }
 }
 
 export async function updateMachine(formData: FormData) {
-  const id = Number(formData.get("id"))
-  const index = machines.findIndex((machine) => machine.id === id)
+  try {
+    const id = Number(formData.get("id"))
+    const index = machines.findIndex((machine) => machine.id === id)
 
-  if (index === -1) {
-    return { success: false, message: "Equipo no encontrado" }
+    if (index === -1) {
+      return { success: false, message: "Equipo no encontrado" }
+    }
+
+    const name = formData.get("name") as string
+    const model = formData.get("model") as string
+    const serialNumber = formData.get("serialNumber") as string
+    const status = formData.get("status") as "Operativa" | "Mantenimiento" | "Inoperativa"
+    const lastMaintenance = formData.get("lastMaintenance") as string
+    const nextMaintenance = formData.get("nextMaintenance") as string
+
+    // Validaciones básicas
+    if (!name || !model || !serialNumber || !status || !lastMaintenance || !nextMaintenance) {
+      return { success: false, message: "Todos los campos obligatorios deben ser completados" }
+    }
+
+    const updatedMachine: Machine = {
+      id,
+      name,
+      model,
+      serialNumber,
+      status,
+      lastMaintenance,
+      nextMaintenance,
+      description: formData.get("description") as string,
+      location: formData.get("location") as string,
+      purchaseDate: formData.get("purchaseDate") as string,
+      manufacturer: formData.get("manufacturer") as string,
+    }
+
+    // Agregar el ítem de inventario asociado si se proporciona
+    const itemInventarioAsociado = formData.get("item_inventario_asociado")
+    if (itemInventarioAsociado && itemInventarioAsociado !== "none") {
+      updatedMachine.item_inventario_asociado = Number(itemInventarioAsociado)
+    }
+
+    machines[index] = updatedMachine
+    revalidatePath("/dashboard/machines")
+    revalidatePath(`/dashboard/machines/${id}`)
+    return { success: true, message: "Equipo actualizado exitosamente", machine: updatedMachine }
+  } catch (error) {
+    return handleActionError(error, "Error al actualizar máquina")
   }
-
-  const updatedMachine: Machine = {
-    id,
-    name: formData.get("name") as string,
-    model: formData.get("model") as string,
-    serialNumber: formData.get("serialNumber") as string,
-    status: formData.get("status") as "Operativa" | "Mantenimiento" | "Inoperativa",
-    lastMaintenance: formData.get("lastMaintenance") as string,
-    nextMaintenance: formData.get("nextMaintenance") as string,
-    description: formData.get("description") as string,
-    location: formData.get("location") as string,
-    purchaseDate: formData.get("purchaseDate") as string,
-    manufacturer: formData.get("manufacturer") as string,
-  }
-
-  // Agregar el ítem de inventario asociado si se proporciona
-  const itemInventarioAsociado = formData.get("item_inventario_asociado")
-  if (itemInventarioAsociado && itemInventarioAsociado !== "") {
-    updatedMachine.item_inventario_asociado = Number(itemInventarioAsociado)
-  }
-
-  machines[index] = updatedMachine
-  revalidatePath("/dashboard/machines")
-  revalidatePath(`/dashboard/machines/${id}`)
-  return { success: true, message: "Equipo actualizado exitosamente", machine: updatedMachine }
 }
 
 export async function deleteMachine(id: number) {
-  const initialLength = machines.length
-  machines = machines.filter((machine) => machine.id !== id)
+  try {
+    const initialLength = machines.length
+    machines = machines.filter((machine) => machine.id !== id)
 
-  if (machines.length === initialLength) {
-    return { success: false, message: "Equipo no encontrado" }
+    if (machines.length === initialLength) {
+      return { success: false, message: "Equipo no encontrado" }
+    }
+
+    // Eliminar también todas las piezas asociadas a esta máquina
+    machineParts = machineParts.filter((part) => part.machineId !== id)
+
+    revalidatePath("/dashboard/machines")
+    return { success: true, message: "Equipo eliminado exitosamente" }
+  } catch (error) {
+    return handleActionError(error, "Error al eliminar máquina")
   }
-
-  revalidatePath("/dashboard/machines")
-  return { success: true, message: "Equipo eliminado exitosamente" }
 }
 
 export async function getMachineParts(machineId: number) {
-  return machineParts.filter((part) => part.machineId === machineId)
+  try {
+    return machineParts.filter((part) => part.machineId === machineId)
+  } catch (error) {
+    console.error(`Error al obtener piezas para la máquina ${machineId}:`, error)
+    return []
+  }
 }
 
 export async function addMachinePart(formData: FormData) {
-  const machineId = Number(formData.get("machineId"))
-  const inventoryItemId = Number(formData.get("inventoryItemId"))
-  const maxUsage = Number(formData.get("maxUsage"))
+  try {
+    const machineId = Number(formData.get("machineId"))
+    const inventoryItemId = Number(formData.get("inventoryItemId"))
+    const name = formData.get("name") as string
+    const installationDate = formData.get("installationDate") as string
+    const usageType = formData.get("usageType") as string
+    const maxUsage = Number(formData.get("maxUsage"))
 
-  const newPart: MachinePart = {
-    id: machineParts.length > 0 ? Math.max(...machineParts.map((p) => p.id)) + 1 : 1,
-    machineId,
-    inventoryItemId,
-    name: formData.get("name") as string,
-    installationDate: formData.get("installationDate") as string,
-    usageType: formData.get("usageType") as string,
-    maxUsage,
-    currentUsage: 0,
-    status: "Normal",
+    // Validaciones básicas
+    if (!machineId || !inventoryItemId || !name || !installationDate || !usageType || !maxUsage) {
+      return { success: false, message: "Todos los campos obligatorios deben ser completados" }
+    }
+
+    const newPart: MachinePart = {
+      id: machineParts.length > 0 ? Math.max(...machineParts.map((p) => p.id)) + 1 : 1,
+      machineId,
+      inventoryItemId,
+      name,
+      installationDate,
+      usageType,
+      maxUsage,
+      currentUsage: 0,
+      status: "Normal",
+    }
+
+    machineParts.push(newPart)
+    revalidatePath(`/dashboard/machines/${machineId}`)
+    return { success: true, message: "Pieza añadida exitosamente", part: newPart }
+  } catch (error) {
+    return handleActionError(error, "Error al añadir pieza")
   }
-
-  machineParts.push(newPart)
-  revalidatePath(`/dashboard/machines/${machineId}`)
-  return { success: true, message: "Pieza añadida exitosamente", part: newPart }
 }
 
 export async function updateMachinePart(formData: FormData) {
-  const id = Number(formData.get("id"))
-  const machineId = Number(formData.get("machineId"))
-  const index = machineParts.findIndex((part) => part.id === id)
+  try {
+    const id = Number(formData.get("id"))
+    const machineId = Number(formData.get("machineId"))
+    const index = machineParts.findIndex((part) => part.id === id)
 
-  if (index === -1) {
-    return { success: false, message: "Pieza no encontrada" }
+    if (index === -1) {
+      return { success: false, message: "Pieza no encontrada" }
+    }
+
+    const inventoryItemId = Number(formData.get("inventoryItemId"))
+    const name = formData.get("name") as string
+    const installationDate = formData.get("installationDate") as string
+    const usageType = formData.get("usageType") as string
+    const maxUsage = Number(formData.get("maxUsage"))
+
+    // Validaciones básicas
+    if (!machineId || !inventoryItemId || !name || !installationDate || !usageType || !maxUsage) {
+      return { success: false, message: "Todos los campos obligatorios deben ser completados" }
+    }
+
+    const updatedPart: MachinePart = {
+      ...machineParts[index],
+      inventoryItemId,
+      name,
+      installationDate,
+      usageType,
+      maxUsage,
+    }
+
+    machineParts[index] = updatedPart
+    revalidatePath(`/dashboard/machines/${machineId}`)
+    return { success: true, message: "Pieza actualizada exitosamente", part: updatedPart }
+  } catch (error) {
+    return handleActionError(error, "Error al actualizar pieza")
   }
-
-  const updatedPart: MachinePart = {
-    ...machineParts[index],
-    inventoryItemId: Number(formData.get("inventoryItemId")),
-    name: formData.get("name") as string,
-    installationDate: formData.get("installationDate") as string,
-    usageType: formData.get("usageType") as string,
-    maxUsage: Number(formData.get("maxUsage")),
-  }
-
-  machineParts[index] = updatedPart
-  revalidatePath(`/dashboard/machines/${machineId}`)
-  return { success: true, message: "Pieza actualizada exitosamente", part: updatedPart }
 }
 
 export async function deleteMachinePart(id: number) {
-  const initialLength = machineParts.length
-  const part = machineParts.find((part) => part.id === id)
-  machineParts = machineParts.filter((part) => part.id !== id)
+  try {
+    const initialLength = machineParts.length
+    const part = machineParts.find((part) => part.id === id)
 
-  if (machineParts.length === initialLength) {
-    return { success: false, message: "Pieza no encontrada" }
+    if (!part) {
+      return { success: false, message: "Pieza no encontrada" }
+    }
+
+    machineParts = machineParts.filter((part) => part.id !== id)
+
+    if (machineParts.length === initialLength) {
+      return { success: false, message: "Pieza no encontrada" }
+    }
+
+    revalidatePath(`/dashboard/machines/${part.machineId}`)
+    return { success: true, message: "Pieza eliminada exitosamente" }
+  } catch (error) {
+    return handleActionError(error, "Error al eliminar pieza")
   }
-
-  revalidatePath(`/dashboard/machines/${part?.machineId}`)
-  return { success: true, message: "Pieza eliminada exitosamente" }
 }
 
 export async function updatePartUsage(formData: FormData) {
-  const id = Number(formData.get("id"))
-  const additionalUsage = Number(formData.get("additionalUsage"))
-  const index = machineParts.findIndex((part) => part.id === id)
+  try {
+    const id = Number(formData.get("id"))
+    const additionalUsage = Number(formData.get("additionalUsage"))
 
-  if (index === -1) {
-    return { success: false, message: "Pieza no encontrada" }
-  }
-
-  const part = { ...machineParts[index] }
-  part.currentUsage += additionalUsage
-
-  // Actualizar el estado de la pieza
-  let statusChanged = false
-  let newStatus = part.status
-
-  const usagePercentage = (part.currentUsage / part.maxUsage) * 100
-
-  if (usagePercentage >= 100 && part.status !== "Crítico") {
-    newStatus = "Crítico"
-    statusChanged = true
-  } else if (usagePercentage >= 75 && part.status !== "Advertencia") {
-    newStatus = "Advertencia"
-    statusChanged = true
-  } else if (usagePercentage < 75 && part.status !== "Normal") {
-    newStatus = "Normal"
-    statusChanged = true
-  }
-
-  part.status = newStatus as "Normal" | "Advertencia" | "Crítico"
-  machineParts[index] = part
-
-  // Crear notificación si el estado cambió a Crítico o Advertencia
-  if (statusChanged && (newStatus === "Crítico" || newStatus === "Advertencia")) {
-    const machine = machines.find((m) => m.id === part.machineId)
-    if (machine) {
-      await createWearPartAlert(part.id.toString(), machine.name, part.name, usagePercentage)
+    if (isNaN(additionalUsage) || additionalUsage <= 0) {
+      return { success: false, message: "La cantidad de uso debe ser un número positivo" }
     }
-  }
 
-  revalidatePath(`/dashboard/machines/${part.machineId}`)
-  return { success: true, message: "Uso actualizado exitosamente", newStatus, statusChanged }
+    const index = machineParts.findIndex((part) => part.id === id)
+
+    if (index === -1) {
+      return { success: false, message: "Pieza no encontrada" }
+    }
+
+    const part = { ...machineParts[index] }
+    part.currentUsage += additionalUsage
+
+    // Actualizar el estado de la pieza
+    let statusChanged = false
+    let newStatus = part.status
+
+    const usagePercentage = (part.currentUsage / part.maxUsage) * 100
+
+    if (usagePercentage >= 100 && part.status !== "Crítico") {
+      newStatus = "Crítico"
+      statusChanged = true
+    } else if (usagePercentage >= 75 && part.status !== "Advertencia") {
+      newStatus = "Advertencia"
+      statusChanged = true
+    } else if (usagePercentage < 75 && part.status !== "Normal") {
+      newStatus = "Normal"
+      statusChanged = true
+    }
+
+    part.status = newStatus as "Normal" | "Advertencia" | "Crítico"
+    machineParts[index] = part
+
+    // Crear notificación si el estado cambió a Crítico o Advertencia
+    if (statusChanged && (newStatus === "Crítico" || newStatus === "Advertencia")) {
+      const machine = machines.find((m) => m.id === part.machineId)
+      if (machine) {
+        await createWearPartAlert(part.id.toString(), machine.name, part.name, usagePercentage)
+      }
+    }
+
+    revalidatePath(`/dashboard/machines/${part.machineId}`)
+    return {
+      success: true,
+      message: "Uso actualizado exitosamente",
+      newStatus,
+      statusChanged,
+      usagePercentage: usagePercentage.toFixed(1),
+    }
+  } catch (error) {
+    return handleActionError(error, "Error al actualizar uso")
+  }
 }
 
 export async function replaceMachinePart(formData: FormData) {
-  const partId = Number(formData.get("partId"))
-  const newInventoryItemId = Number(formData.get("newInventoryItemId"))
-  const index = machineParts.findIndex((part) => part.id === partId)
+  try {
+    const partId = Number(formData.get("partId"))
+    const newInventoryItemId = Number(formData.get("newInventoryItemId"))
 
-  if (index === -1) {
-    return { success: false, message: "Pieza no encontrada" }
+    if (!newInventoryItemId) {
+      return { success: false, message: "Debe seleccionar una pieza de repuesto" }
+    }
+
+    const index = machineParts.findIndex((part) => part.id === partId)
+
+    if (index === -1) {
+      return { success: false, message: "Pieza no encontrada" }
+    }
+
+    const part = machineParts[index]
+    const machineId = part.machineId
+
+    // Crear una nueva pieza con la información del repuesto
+    const newPart: MachinePart = {
+      id: machineParts.length > 0 ? Math.max(...machineParts.map((p) => p.id)) + 1 : 1,
+      machineId: part.machineId,
+      inventoryItemId: newInventoryItemId,
+      name: part.name,
+      installationDate: new Date().toISOString().split("T")[0],
+      usageType: part.usageType,
+      maxUsage: part.maxUsage,
+      currentUsage: 0,
+      status: "Normal",
+    }
+
+    machineParts.push(newPart)
+
+    // Eliminar la pieza anterior
+    machineParts = machineParts.filter((part) => part.id !== partId)
+
+    revalidatePath(`/dashboard/machines/${machineId}`)
+    return { success: true, message: "Pieza reemplazada exitosamente" }
+  } catch (error) {
+    return handleActionError(error, "Error al reemplazar pieza")
   }
-
-  const part = machineParts[index]
-  const machineId = part.machineId
-
-  // Crear una nueva pieza con la información del repuesto
-  const newPart: MachinePart = {
-    id: machineParts.length > 0 ? Math.max(...machineParts.map((p) => p.id)) + 1 : 1,
-    machineId: part.machineId,
-    inventoryItemId: newInventoryItemId,
-    name: part.name,
-    installationDate: new Date().toISOString().split("T")[0],
-    usageType: part.usageType,
-    maxUsage: part.maxUsage,
-    currentUsage: 0,
-    status: "Normal",
-  }
-
-  machineParts.push(newPart)
-
-  // Eliminar la pieza anterior
-  machineParts = machineParts.filter((part) => part.id !== partId)
-
-  revalidatePath(`/dashboard/machines/${machineId}`)
-  return { success: true, message: "Pieza reemplazada exitosamente" }
 }

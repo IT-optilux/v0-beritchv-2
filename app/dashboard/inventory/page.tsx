@@ -103,16 +103,17 @@ export default function InventoryPage() {
   const confirmDelete = async () => {
     if (!selectedItem) return
 
+    const itemToDelete = selectedItem // Capturar el valor actual
     setIsDeleting(true)
     try {
-      const result = await deleteInventoryItem(selectedItem.id)
+      const result = await deleteInventoryItem(itemToDelete.id)
 
       if (result.success) {
         toast({
           title: "Éxito",
           description: result.message,
         })
-        setInventoryItems(inventoryItems.filter((item) => item.id !== selectedItem.id))
+        setInventoryItems(inventoryItems.filter((item) => item.id !== itemToDelete.id))
       } else {
         toast({
           title: "Error",

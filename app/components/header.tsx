@@ -14,32 +14,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 
-import { auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
-import { removeUserSession, getUserSession } from '@/lib/cookies';
-import { useHasMounted } from "@/hooks/useHasMounted";
-
-
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
-  const hasMounted = useHasMounted();
 
-  if (!hasMounted) {
-    return null;
-  }
-
-  const { email } = getUserSession();
-
-  const handleLogout = async () => {
-
-    try {
-      removeUserSession();
-      await signOut(auth);
-      router.push("/");
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error);
-    }
+  const handleLogout = () => {
+    router.push("/")
   }
 
   return (
@@ -66,7 +46,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-optilab-blue text-white">
               <User className="h-5 w-5" />
             </div>
-            <span className="text-sm font-medium">{email}</span>
+            <span className="text-sm font-medium">Admin</span>
             <ChevronDown className="h-4 w-4 text-gray-500" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

@@ -60,7 +60,7 @@ export function MachinePartForm({
     }
 
     fetchWearParts()
-  }, [part, toast])
+  }, [part?.inventoryItemId, toast])
 
   const handlePartChange = (value: string) => {
     setSelectedPart(value)

@@ -1,64 +1,51 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { Dialog, DialogContent, DialogOverlay } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
 
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
-  title: string
   children: React.ReactNode
-  size?: "sm" | "md" | "lg" | "xl"
+  title?: string
+  className?: string
 }
 
-export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
-  const [isVisible, setIsVisible] = useState(false)
+export function Modal({ isOpen, onClose, children, title, className }: ModalProps) {
+  const [open, setOpen] = useState(false)
 
+  // Sincronizar el estado interno con la prop isOpen
   useEffect(() => {
     if (isOpen) {
-      setIsVisible(true)
-      document.body.style.overflow = "hidden"
+      setOpen(true)
     } else {
-      const timer = setTimeout(() => {
-        setIsVisible(false)
-      }, 300)
-      document.body.style.overflow = ""
+      const timer = setTimeout(() => setOpen(false), 300)
       return () => clearTimeout(timer)
     }
   }, [isOpen])
 
-  if (!isVisible) return null
-
-  const sizeClasses = {
-    sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-lg",
-    xl: "max-w-xl",
-  }
-
   return (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-300 ${
-        isOpen ? "opacity-100" : "opacity-0"
-      }`}
-      onClick={onClose}
+    <Dialog
+      open={open}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
     >
-      <div
-        className={`w-full ${sizeClasses[size]} rounded-lg bg-white shadow-lg transition-transform duration-300 ${
-          isOpen ? "scale-100" : "scale-95"
-        }`}
-        onClick={(e) => e.stopPropagation()}
+      <DialogOverlay
+        className={cn("fixed inset-0 z-50 bg-black/50 transition-opacity", isOpen ? "opacity-100" : "opacity-0")}
+      />
+      <DialogContent
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white p-6 shadow-lg transition-all duration-300",
+          isOpen ? "opacity-100 scale-100" : "opacity-0 scale-95",
+          className,
+        )}
       >
-        <div className="flex items-center justify-between border-b p-4">
-          <h2 className="text-lg font-semibold text-optilab-blue">{title}</h2>
-          <button onClick={onClose} className="rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
+        {title && <h2 className="text-xl font-semibold mb-4">{title}</h2>}
+        {children}
+      </DialogContent>
+    </Dialog>
   )
 }

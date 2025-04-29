@@ -222,7 +222,13 @@ export function ReportForm({ report, isEditing = false, onClose }: ReportFormPro
         <Button
           type="button"
           variant="outline"
-          onClick={onClose || (() => router.push("/dashboard/reports"))}
+          onClick={() => {
+            if (onClose) {
+              onClose()
+            } else {
+              router.push("/dashboard/reports")
+            }
+          }}
           disabled={isSubmitting}
         >
           Cancelar

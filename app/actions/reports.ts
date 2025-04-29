@@ -69,6 +69,15 @@ let reports: Report[] = [
   },
 ]
 
+// Función de utilidad para manejar errores
+const handleActionError = (error: unknown, message: string) => {
+  console.error(`${message}:`, error)
+  return {
+    success: false,
+    message: "Ha ocurrido un error inesperado. Por favor, inténtelo de nuevo más tarde.",
+  }
+}
+
 export async function getReports() {
   return reports
 }
@@ -78,24 +87,28 @@ export async function getReportById(id: number) {
 }
 
 export async function createReport(formData: FormData) {
-  const newReport: Report = {
-    id: reports.length > 0 ? Math.max(...reports.map((r) => r.id)) + 1 : 1,
-    machineId: Number(formData.get("machineId")),
-    machineName: formData.get("machineName") as string,
-    reportType: formData.get("reportType") as "Falla" | "Mantenimiento" | "Calibración",
-    description: formData.get("description") as string,
-    reportedBy: formData.get("reportedBy") as string,
-    reportDate: formData.get("reportDate") as string,
-    status: formData.get("status") as "Pendiente" | "En proceso" | "Completado",
-    priority: formData.get("priority") as "Alta" | "Media" | "Baja",
-    assignedTo: formData.get("assignedTo") as string,
-    resolution: formData.get("resolution") as string,
-    completedDate: formData.get("completedDate") as string,
-  }
+  try {
+    const newReport: Report = {
+      id: reports.length > 0 ? Math.max(...reports.map((r) => r.id)) + 1 : 1,
+      machineId: Number(formData.get("machineId")),
+      machineName: formData.get("machineName") as string,
+      reportType: formData.get("reportType") as "Falla" | "Mantenimiento" | "Calibración",
+      description: formData.get("description") as string,
+      reportedBy: formData.get("reportedBy") as string,
+      reportDate: formData.get("reportDate") as string,
+      status: formData.get("status") as "Pendiente" | "En proceso" | "Completado",
+      priority: formData.get("priority") as "Alta" | "Media" | "Baja",
+      assignedTo: formData.get("assignedTo") as string,
+      resolution: formData.get("resolution") as string,
+      completedDate: formData.get("completedDate") as string,
+    }
 
-  reports.push(newReport)
-  revalidatePath("/dashboard/reports")
-  return { success: true, message: "Reporte creado exitosamente", report: newReport }
+    reports.push(newReport)
+    revalidatePath("/dashboard/reports")
+    return { success: true, message: "Reporte creado exitosamente", report: newReport }
+  } catch (error) {
+    return handleActionError(error, "Error al crear reporte")
+  }
 }
 
 export async function updateReport(formData: FormData) {

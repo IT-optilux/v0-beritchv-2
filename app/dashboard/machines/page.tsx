@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Plus, Pencil, Trash2 } from "lucide-react"
 import type { Machine } from "@/types"
@@ -25,48 +25,50 @@ export default function MachinesPage() {
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  useEffect(() => {
-    const fetchMachines = async () => {
-      try {
-        const data = await getMachines()
-        setMachines(data)
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los equipos.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
+  const fetchMachines = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const data = await getMachines()
+      setMachines(data)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los equipos.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchMachines()
   }, [toast])
 
-  const handleEdit = (machine: Machine) => {
+  useEffect(() => {
+    fetchMachines()
+  }, [fetchMachines])
+
+  const handleEdit = useCallback((machine: Machine) => {
     setSelectedMachine(machine)
     setIsEditModalOpen(true)
-  }
+  }, [])
 
-  const handleDelete = (machine: Machine) => {
+  const handleDelete = useCallback((machine: Machine) => {
     setSelectedMachine(machine)
     setIsDeleteDialogOpen(true)
-  }
+  }, [])
 
   const confirmDelete = async () => {
     if (!selectedMachine) return
 
+    const machineToDelete = selectedMachine // Capturar el valor actual
     setIsDeleting(true)
     try {
-      const result = await deleteMachine(selectedMachine.id)
+      const result = await deleteMachine(machineToDelete.id)
 
       if (result.success) {
         toast({
           title: "Éxito",
           description: result.message,
         })
-        setMachines(machines.filter((m) => m.id !== selectedMachine.id))
+        setMachines(machines.filter((m) => m.id !== machineToDelete.id))
       } else {
         toast({
           title: "Error",
@@ -88,23 +90,18 @@ export default function MachinesPage() {
   }
 
   const refreshData = async () => {
-    try {
-      const data = await getMachines()
-      setMachines(data)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron actualizar los datos.",
-        variant: "destructive",
-      })
-    }
+    await fetchMachines()
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-optilab-blue">Máquinas y Equipos</h1>
-        <Button className="bg-optilab-blue hover:bg-optilab-blue/90" onClick={() => setIsAddModalOpen(true)}>
+        <Button
+          className="bg-optilab-blue hover:bg-optilab-blue/90"
+          onClick={() => setIsAddModalOpen(true)}
+          aria-label="Agregar nuevo equipo"
+        >
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Equipo
         </Button>
@@ -118,7 +115,10 @@ export default function MachinesPage() {
         <CardContent>
           {isLoading ? (
             <div className="flex h-40 items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-optilab-blue border-t-transparent"></div>
+              <div
+                className="h-8 w-8 animate-spin rounded-full border-4 border-optilab-blue border-t-transparent"
+                aria-label="Cargando..."
+              ></div>
             </div>
           ) : (
             <Table>
@@ -164,20 +164,30 @@ export default function MachinesPage() {
                       <TableCell>{new Date(machine.nextMaintenance).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(machine)} className="h-8 w-8 p-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(machine)}
+                            className="h-8 w-8 p-0"
+                            aria-label={`Editar ${machine.name}`}
+                          >
                             <Pencil className="h-4 w-4 text-optilab-blue" />
+                            <span className="sr-only">Editar {machine.name}</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(machine)}
                             className="h-8 w-8 p-0"
+                            aria-label={`Eliminar ${machine.name}`}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
+                            <span className="sr-only">Eliminar {machine.name}</span>
                           </Button>
                           <Link
                             href={`/dashboard/machines/${machine.id}`}
                             className="inline-flex h-8 items-center rounded-md px-3 text-sm font-medium text-optilab-blue hover:bg-gray-100"
+                            aria-label={`Ver detalles de ${machine.name}`}
                           >
                             Ver detalles
                           </Link>
@@ -236,7 +246,3 @@ export default function MachinesPage() {
     </div>
   )
 }
-
-
-
-

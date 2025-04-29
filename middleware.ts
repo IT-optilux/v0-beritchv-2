@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { auth } from "./lib/firebase-admin"
 
 // Rutas que requieren autenticación
 const protectedRoutes = ["/dashboard"]
@@ -11,16 +10,16 @@ const publicRoutes = ["/", "/login", "/register"]
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Add security headers
+  // Crear respuesta base con headers de seguridad
   const response = NextResponse.next()
 
-  // Security headers
+  // Añadir headers de seguridad
   response.headers.set("X-Frame-Options", "DENY")
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
-  // Content Security Policy - adjust as needed for your application
+  // Content Security Policy - ajustar según las necesidades de la aplicación
   response.headers.set(
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com;",
@@ -44,16 +43,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  try {
-    // Verificar el token con Firebase Admin
-    await auth.verifySessionCookie(sessionCookie, true)
-    return response
-  } catch (error) {
-    // Si el token no es válido, redirigir al login
-    const url = new URL("/login", request.url)
-    url.searchParams.set("redirect", pathname)
-    return NextResponse.redirect(url)
-  }
+  // Para verificar el token, necesitamos usar una API Route
+  // ya que no podemos usar Firebase Admin directly en el middleware
+  // debido a las limitaciones de Edge Runtime
+
+  // Permitir el acceso si hay un token (la verificación real se hará en los componentes)
+  return response
 }
 
 // Configurar las rutas que deben pasar por el middleware

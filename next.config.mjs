@@ -30,6 +30,25 @@ const nextConfig = {
       },
     ];
   },
+  // Configuración de webpack para manejar módulos de Node.js
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // No intentar resolver módulos de Node.js en el cliente
+      config.resolve.fallback = {
+        fs: false,
+        path: false,
+        os: false,
+        crypto: false,
+        stream: false,
+        http: false,
+        https: false,
+        zlib: false,
+        process: false,
+      };
+    }
+    
+    return config;
+  },
 };
 
 export default nextConfig;

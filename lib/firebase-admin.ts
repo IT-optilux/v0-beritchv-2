@@ -1,25 +1,29 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
-import { getAuth } from "firebase-admin/auth"
-import { getStorage } from "firebase-admin/storage"
+// Reemplazando la implementación anterior con una compatible con Next.js
+import * as admin from "firebase-admin"
 
-// Initialize Firebase Admin
-const firebaseAdminConfig = {
-  credential: cert({
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    // Replace newlines in the private key
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-  }),
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+// Verificar si Firebase Admin ya está inicializado
+const getFirebaseAdmin = () => {
+  if (!admin.apps.length) {
+    // Inicializar Firebase Admin
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // Reemplazar newlines en la private key
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    })
+  }
+
+  return {
+    auth: admin.auth(),
+    firestore: admin.firestore(),
+    storage: admin.storage(),
+  }
 }
 
-// Initialize the app only if it hasn't been initialized already
-const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseAdminConfig)
+// Exportar las instancias de Firebase Admin
+const { auth, firestore, storage } = getFirebaseAdmin()
 
-// Get Firestore, Auth, and Storage instances
-const db = getFirestore(app)
-const auth = getAuth(app)
-const storage = getStorage(app)
-
-export { app, db, auth, storage }
+export { auth, firestore as db, storage }

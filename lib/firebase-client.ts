@@ -1,9 +1,9 @@
-import { initializeApp, getApps, getApp } from "firebase/app"
+import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 import { getStorage } from "firebase/storage"
 
-// Firebase configuration
+// Configuración de Firebase
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -14,25 +14,11 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+// Inicializar Firebase solo si no hay instancias previas
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0]
 
-// Initialize Firebase services
-const auth = getAuth(app)
-const db = getFirestore(app)
-const storage = getStorage(app)
-
-// Check if we should use Firebase emulators (for local development)
-if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true" && typeof window !== "undefined") {
-  const { connectAuthEmulator } = require("firebase/auth")
-  const { connectFirestoreEmulator } = require("firebase/firestore")
-  const { connectStorageEmulator } = require("firebase/storage")
-
-  connectAuthEmulator(auth, "http://localhost:9099")
-  connectFirestoreEmulator(db, "localhost", 8080)
-  connectStorageEmulator(storage, "localhost", 9199)
-
-  console.log("Using Firebase emulators")
-}
-
-export { app, auth, db, storage }
+// Exportar servicios de Firebase
+export const auth = getAuth(app)
+export const db = getFirestore(app)
+export const storage = getStorage(app)
+export default app

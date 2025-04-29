@@ -3,65 +3,72 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Eye, EyeOff, LogIn } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase-client"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { loginUser } from "@/app/actions/users"
 import { useToast } from "@/hooks/use-toast"
 
 export function LoginForm() {
-  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const router = useRouter()
   const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams.get("redirect") || "/dashboard"
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {}
-
-    if (!username) newErrors.username = "El nombre de usuario es requerido"
-    if (!password) newErrors.password = "La contraseña es requerida"
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-
-    if (!validateForm()) return
-
     setIsLoading(true)
 
     try {
-      const formData = new FormData()
-      formData.append("username", username)
-      formData.append("password", password)
+      // Iniciar sesión con Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
 
-      const result = await loginUser(formData)
+      // Obtener el token ID
+      const idToken = await userCredential.user.getIdToken()
 
-      if (result.success) {
+      // Enviar el token a nuestra API para crear una cookie de sesión
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
         toast({
-          title: "Éxito",
-          description: "Inicio de sesión exitoso",
+          title: "Inicio de sesión exitoso",
+          description: "Redirigiendo al dashboard...",
         })
-        router.push("/dashboard")
+
+        // Redirigir al usuario
+        router.push(redirectUrl)
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
+        throw new Error(data.message || "Error al iniciar sesión")
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error al iniciar sesión:", error)
+
+      let errorMessage = "Error al iniciar sesión. Por favor, inténtelo de nuevo."
+
+      // Manejar errores específicos de Firebase Auth
+      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+        errorMessage = "Credenciales inválidas. Por favor, verifique su email y contraseña."
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Demasiados intentos fallidos. Por favor, inténtelo más tarde."
+      }
+
       toast({
         title: "Error",
-        description: "Ha ocurrido un error al iniciar sesión",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -70,84 +77,45 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="username">Usuario</Label>
-        <Input
-          id="username"
-          type="text"
-          value={username}
-          onChange={(e) => {
-            setUsername(e.target.value)
-            if (errors.username) setErrors({ ...errors, username: "" })
-          }}
-          placeholder="Ingrese su usuario"
-          required
-          className="border-optilab-blue/30 focus-visible:ring-optilab-light"
-          aria-invalid={!!errors.username}
-          aria-describedby={errors.username ? "username-error" : undefined}
-          disabled={isLoading}
-        />
-        {errors.username && (
-          <p id="username-error" className="text-sm text-red-500">
-            {errors.username}
-          </p>
-        )}
+    <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border bg-white p-6 shadow-lg">
+      <div className="space-y-2 text-center">
+        <h1 className="text-3xl font-bold">Iniciar Sesión</h1>
+        <p className="text-gray-500">Ingrese sus credenciales para acceder al sistema</p>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
-        <div className="relative">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Correo Electrónico</Label>
           <Input
-            id="password"
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              if (errors.password) setErrors({ ...errors, password: "" })
-            }}
-            placeholder="Ingrese su contraseña"
+            id="email"
+            type="email"
+            placeholder="ejemplo@beritchoptilab.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            className="border-optilab-blue/30 pr-10 focus-visible:ring-optilab-light"
-            aria-invalid={!!errors.password}
-            aria-describedby={errors.password ? "password-error" : undefined}
             disabled={isLoading}
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-            disabled={isLoading}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
         </div>
-        {errors.password && (
-          <p id="password-error" className="text-sm text-red-500">
-            {errors.password}
-          </p>
-        )}
-      </div>
-      <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
-        {isLoading ? (
-          <span className="flex items-center gap-2">
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            Iniciando sesión...
-          </span>
-        ) : (
-          <span className="flex items-center gap-2">
-            <LogIn size={18} />
-            Iniciar Sesión
-          </span>
-        )}
-      </Button>
-    </form>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            <a href="#" className="text-sm text-blue-600 hover:underline">
+              ¿Olvidó su contraseña?
+            </a>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={isLoading}
+          />
+        </div>
+        <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
+          {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+        </Button>
+      </form>
+    </div>
   )
 }

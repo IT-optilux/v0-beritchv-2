@@ -1,284 +1,218 @@
 "use server"
 
+import { auth, db } from "@/lib/firebase-admin"
 import { revalidatePath } from "next/cache"
-import { auth, firestore } from "@/lib/firebase-admin"
-import type { UserRecord } from "firebase-admin/auth"
-import type { User, UserRole } from "@/types/users"
-import { isAdmin } from "@/lib/auth-utils"
 import { cookies } from "next/headers"
-
-// Función de utilidad para manejar errores
-const handleActionError = (error: unknown, message: string) => {
-  console.error(`${message}:`, error)
-  return {
-    success: false,
-    message: "Ha ocurrido un error inesperado. Por favor, inténtelo de nuevo más tarde.",
-  }
-}
-
-// Función para convertir UserRecord a nuestro tipo User
-const userRecordToUser = async (userRecord: UserRecord): Promise<User> => {
-  // Obtener datos adicionales de Firestore
-  const userDoc = await firestore.collection("users").doc(userRecord.uid).get()
-  const userData = userDoc.exists ? userDoc.data() : {}
-
-  return {
-    uid: userRecord.uid,
-    email: userRecord.email || "",
-    displayName: userRecord.displayName || "",
-    firstName: userData?.firstName || "",
-    lastName: userData?.lastName || "",
-    role: (userData?.role || userRecord.customClaims?.role || "invitado") as UserRole,
-    isActive: userRecord.disabled !== true,
-    lastLogin: userRecord.metadata.lastSignInTime || "",
-    createdAt: userRecord.metadata.creationTime || new Date().toISOString(),
-    photoURL: userRecord.photoURL || "",
-  }
-}
+import { handleError } from "@/lib/error-handler"
 
 // Verificar si el usuario actual es administrador
-const verifyAdminAccess = async () => {
-  const sessionCookie = cookies().get("session")?.value
-
-  if (!sessionCookie) {
-    return {
-      success: false,
-      message: "No tiene permisos para realizar esta acción",
-    }
-  }
-
+async function isAdmin() {
   try {
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
-    const userRecord = await auth.getUser(decodedClaims.uid)
-    const user = await userRecordToUser(userRecord)
+    const sessionCookie = cookies().get("session")?.value
 
-    if (!(await isAdmin(user))) {
-      return {
-        success: false,
-        message: "Solo los administradores pueden gestionar usuarios",
-      }
+    if (!sessionCookie) {
+      return false
     }
 
-    return { success: true }
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true).catch(() => null)
+
+    if (!decodedClaims) {
+      return false
+    }
+
+    const userRecord = await auth.getUser(decodedClaims.uid).catch(() => null)
+
+    if (!userRecord) {
+      return false
+    }
+
+    const customClaims = userRecord.customClaims || {}
+    return customClaims.role === "admin"
   } catch (error) {
-    return handleActionError(error, "Error al verificar permisos de administrador")
+    console.error("Error al verificar permisos de administrador:", error)
+    return false
   }
 }
 
 // Obtener todos los usuarios
 export async function getUsers() {
   try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return []
+    // Verificar si el usuario es administrador
+    const adminCheck = await isAdmin()
+    if (!adminCheck) {
+      return { success: false, error: "No tienes permisos para realizar esta acción" }
     }
 
-    // Obtener todos los usuarios de Firebase Auth
+    // Obtener usuarios de Firebase Auth
     const listUsersResult = await auth.listUsers()
+    const users = listUsersResult.users.map((user) => ({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      disabled: user.disabled,
+      role: user.customClaims?.role || "invitado",
+      creationTime: user.metadata.creationTime,
+      lastSignInTime: user.metadata.lastSignInTime,
+    }))
 
-    // Convertir a nuestro tipo User
-    const users = await Promise.all(listUsersResult.users.map((userRecord) => userRecordToUser(userRecord)))
-
-    return users
+    return { success: true, users }
   } catch (error) {
-    console.error("Error al obtener usuarios:", error)
-    return []
-  }
-}
-
-// Obtener un usuario por ID
-export async function getUserById(uid: string) {
-  try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return null
-    }
-
-    const userRecord = await auth.getUser(uid)
-    return await userRecordToUser(userRecord)
-  } catch (error) {
-    console.error(`Error al obtener usuario con ID ${uid}:`, error)
-    return null
+    return handleError(error, "Error al obtener usuarios")
   }
 }
 
 // Crear un nuevo usuario
 export async function createUser(formData: FormData) {
   try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return adminCheck
+    // Verificar si el usuario es administrador
+    const adminCheck = await isAdmin()
+    if (!adminCheck) {
+      return { success: false, error: "No tienes permisos para realizar esta acción" }
     }
 
     const email = formData.get("email") as string
     const password = formData.get("password") as string
-    const firstName = formData.get("firstName") as string
-    const lastName = formData.get("lastName") as string
-    const role = formData.get("role") as UserRole
-    const isActive = formData.get("isActive") === "true"
+    const displayName = formData.get("displayName") as string
+    const role = formData.get("role") as string
 
-    // Validaciones básicas
-    if (!email || !password) {
-      return { success: false, message: "Email y contraseña son obligatorios" }
+    // Validar datos
+    if (!email || !password || !displayName || !role) {
+      return { success: false, error: "Todos los campos son obligatorios" }
     }
 
     // Crear usuario en Firebase Auth
     const userRecord = await auth.createUser({
       email,
       password,
-      displayName: `${firstName} ${lastName}`.trim(),
-      disabled: !isActive,
+      displayName,
+      disabled: false,
     })
 
-    // Establecer claims personalizados para roles
+    // Asignar rol mediante custom claims
     await auth.setCustomUserClaims(userRecord.uid, { role })
 
-    // Guardar datos adicionales en Firestore
-    await firestore.collection("users").doc(userRecord.uid).set({
-      firstName,
-      lastName,
+    // Guardar información adicional en Firestore
+    await db.collection("users").doc(userRecord.uid).set({
+      email,
+      displayName,
       role,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     revalidatePath("/dashboard/users")
-    return {
-      success: true,
-      message: "Usuario creado exitosamente",
-      user: await userRecordToUser(userRecord),
-    }
+    return { success: true, message: "Usuario creado correctamente" }
   } catch (error) {
-    return handleActionError(error, "Error al crear usuario")
+    return handleError(error, "Error al crear usuario")
   }
 }
 
 // Actualizar un usuario existente
 export async function updateUser(formData: FormData) {
   try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return adminCheck
+    // Verificar si el usuario es administrador
+    const adminCheck = await isAdmin()
+    if (!adminCheck) {
+      return { success: false, error: "No tienes permisos para realizar esta acción" }
     }
 
     const uid = formData.get("uid") as string
-    const email = formData.get("email") as string
-    const firstName = formData.get("firstName") as string
-    const lastName = formData.get("lastName") as string
-    const role = formData.get("role") as UserRole
-    const isActive = formData.get("isActive") === "true"
-    const password = formData.get("password") as string
+    const displayName = formData.get("displayName") as string
+    const role = formData.get("role") as string
+    const disabled = formData.get("disabled") === "true"
 
-    if (!uid) {
-      return { success: false, message: "ID de usuario no proporcionado" }
-    }
-
-    // Preparar datos para actualizar en Firebase Auth
-    const updateAuthData: any = {
-      email,
-      displayName: `${firstName} ${lastName}`.trim(),
-      disabled: !isActive,
-    }
-
-    // Si se proporciona una nueva contraseña, actualizarla
-    if (password) {
-      updateAuthData.password = password
+    // Validar datos
+    if (!uid || !displayName || !role) {
+      return { success: false, error: "Faltan campos obligatorios" }
     }
 
     // Actualizar usuario en Firebase Auth
-    await auth.updateUser(uid, updateAuthData)
+    await auth.updateUser(uid, {
+      displayName,
+      disabled,
+    })
 
-    // Actualizar claims personalizados para roles
+    // Actualizar rol mediante custom claims
     await auth.setCustomUserClaims(uid, { role })
 
-    // Actualizar datos adicionales en Firestore
-    await firestore.collection("users").doc(uid).update({
-      firstName,
-      lastName,
+    // Actualizar información en Firestore
+    await db.collection("users").doc(uid).update({
+      displayName,
       role,
-      updatedAt: new Date().toISOString(),
+      disabled,
+      updatedAt: new Date(),
     })
 
     revalidatePath("/dashboard/users")
-
-    const updatedUser = await auth.getUser(uid)
-    return {
-      success: true,
-      message: "Usuario actualizado exitosamente",
-      user: await userRecordToUser(updatedUser),
-    }
+    return { success: true, message: "Usuario actualizado correctamente" }
   } catch (error) {
-    return handleActionError(error, "Error al actualizar usuario")
+    return handleError(error, "Error al actualizar usuario")
   }
 }
 
 // Eliminar un usuario
-export async function deleteUser(uid: string) {
+export async function deleteUser(formData: FormData) {
   try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return adminCheck
+    // Verificar si el usuario es administrador
+    const adminCheck = await isAdmin()
+    if (!adminCheck) {
+      return { success: false, error: "No tienes permisos para realizar esta acción" }
     }
 
-    // No permitir eliminar al usuario que está realizando la acción
-    const sessionCookie = cookies().get("session")?.value
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie!, true)
+    const uid = formData.get("uid") as string
 
-    if (decodedClaims.uid === uid) {
-      return { success: false, message: "No puede eliminar su propia cuenta" }
+    // Validar datos
+    if (!uid) {
+      return { success: false, error: "ID de usuario no proporcionado" }
+    }
+
+    // Verificar que no se está eliminando al propio administrador
+    const sessionCookie = cookies().get("session")?.value
+    if (sessionCookie) {
+      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+      if (decodedClaims.uid === uid) {
+        return { success: false, error: "No puedes eliminar tu propia cuenta" }
+      }
     }
 
     // Eliminar usuario de Firebase Auth
     await auth.deleteUser(uid)
 
-    // Eliminar datos adicionales de Firestore
-    await firestore.collection("users").doc(uid).delete()
+    // Eliminar información de Firestore
+    await db.collection("users").doc(uid).delete()
 
     revalidatePath("/dashboard/users")
-    return { success: true, message: "Usuario eliminado exitosamente" }
+    return { success: true, message: "Usuario eliminado correctamente" }
   } catch (error) {
-    return handleActionError(error, "Error al eliminar usuario")
+    return handleError(error, "Error al eliminar usuario")
   }
 }
 
-// Cambiar el estado de un usuario (activar/desactivar)
-export async function toggleUserStatus(uid: string) {
+// Cambiar contraseña de usuario
+export async function changePassword(formData: FormData) {
   try {
-    const adminCheck = await verifyAdminAccess()
-    if (!adminCheck.success) {
-      return adminCheck
+    // Verificar si el usuario es administrador
+    const adminCheck = await isAdmin()
+    if (!adminCheck) {
+      return { success: false, error: "No tienes permisos para realizar esta acción" }
     }
 
-    // No permitir desactivar al usuario que está realizando la acción
-    const sessionCookie = cookies().get("session")?.value
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie!, true)
+    const uid = formData.get("uid") as string
+    const newPassword = formData.get("password") as string
 
-    if (decodedClaims.uid === uid) {
-      return { success: false, message: "No puede desactivar su propia cuenta" }
+    // Validar datos
+    if (!uid || !newPassword) {
+      return { success: false, error: "Faltan campos obligatorios" }
     }
 
-    // Obtener usuario actual
-    const userRecord = await auth.getUser(uid)
-
-    // Cambiar estado
+    // Actualizar contraseña en Firebase Auth
     await auth.updateUser(uid, {
-      disabled: !userRecord.disabled,
+      password: newPassword,
     })
 
-    // Actualizar en Firestore
-    await firestore.collection("users").doc(uid).update({
-      isActive: !userRecord.disabled,
-      updatedAt: new Date().toISOString(),
-    })
-
-    revalidatePath("/dashboard/users")
-
-    const updatedUser = await auth.getUser(uid)
-    return {
-      success: true,
-      message: `Usuario ${userRecord.disabled ? "activado" : "desactivado"} exitosamente`,
-      user: await userRecordToUser(updatedUser),
-    }
+    return { success: true, message: "Contraseña actualizada correctamente" }
   } catch (error) {
-    return handleActionError(error, "Error al cambiar estado del usuario")
+    return handleError(error, "Error al cambiar contraseña")
   }
 }

@@ -1,437 +1,312 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, ToggleLeft } from "lucide-react"
-import type { User } from "@/types/users"
-import { getUsers, deleteUser, toggleUserStatus } from "@/app/actions/users"
-
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Modal } from "@/components/ui/modal"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { UserForm } from "@/components/users/user-form"
+import UserForm from "@/components/users/user-form"
+import { getUsers, deleteUser } from "@/app/actions/users"
 import { useToast } from "@/hooks/use-toast"
-import { Input } from "@/components/ui/input"
+import { Loader2, Plus, Search, Trash2, Edit, UserCog } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+
+interface User {
+  uid: string
+  email: string
+  displayName: string
+  role: string
+  disabled: boolean
+  creationTime?: string
+  lastSignInTime?: string
+}
 
 export default function UsersPage() {
   const { toast } = useToast()
-  const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [roleFilter, setRoleFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState("")
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
 
+  // Verificar si el usuario es administrador
   useEffect(() => {
-    const checkAdminAndLoadUsers = async () => {
+    const checkAdmin = async () => {
       try {
-        // Verificar si el usuario actual es administrador
-        const response = await fetch("/api/auth/verify-session")
+        const response = await fetch("/api/auth/check-admin")
         const data = await response.json()
 
-        if (!data.authenticated) {
-          router.push("/login?redirect=/dashboard/users")
-          return
-        }
+        setIsAdmin(data.isAdmin)
 
-        // Verificar si el usuario tiene rol de administrador
-        const adminResponse = await fetch("/api/auth/check-admin")
-        const adminData = await adminResponse.json()
-
-        if (!adminData.isAdmin) {
+        if (!data.isAdmin) {
           toast({
             title: "Acceso denegado",
-            description: "Solo los administradores pueden acceder a esta página",
+            description: "No tienes permisos para acceder a esta página",
             variant: "destructive",
           })
-          router.push("/dashboard")
-          return
         }
-
-        setIsAdmin(true)
-        setCurrentUser(data.user)
-
-        // Cargar usuarios
-        const usersData = await getUsers()
-        setUsers(usersData)
-        setFilteredUsers(usersData)
       } catch (error) {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los usuarios",
-          variant: "destructive",
-        })
-        router.push("/dashboard")
-      } finally {
-        setIsLoading(false)
+        console.error("Error al verificar permisos:", error)
+        setIsAdmin(false)
       }
     }
 
-    checkAdminAndLoadUsers()
-  }, [router, toast])
+    checkAdmin()
+  }, [toast])
+
+  // Cargar usuarios
+  const loadUsers = async () => {
+    setIsLoading(true)
+    try {
+      const result = await getUsers()
+      if (result.success) {
+        setUsers(result.users || [])
+        setFilteredUsers(result.users || [])
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "No se pudieron cargar los usuarios",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Ha ocurrido un error inesperado",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let result = users
+    if (isAdmin) {
+      loadUsers()
+    }
+  }, [isAdmin])
 
-    // Aplicar filtro de búsqueda
-    if (searchQuery) {
-      result = result.filter(
-        (user) =>
-          user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          user.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()),
+  // Filtrar usuarios
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredUsers(users)
+    } else {
+      const term = searchTerm.toLowerCase()
+      setFilteredUsers(
+        users.filter(
+          (user) =>
+            user.displayName.toLowerCase().includes(term) ||
+            user.email.toLowerCase().includes(term) ||
+            user.role.toLowerCase().includes(term),
+        ),
       )
     }
+  }, [searchTerm, users])
 
-    // Aplicar filtro de rol
-    if (roleFilter) {
-      result = result.filter((user) => user.role === roleFilter)
-    }
-
-    // Aplicar filtro de estado
-    if (statusFilter) {
-      result = result.filter((user) => {
-        if (statusFilter === "active") return user.isActive
-        if (statusFilter === "inactive") return !user.isActive
-        return true
-      })
-    }
-
-    setFilteredUsers(result)
-  }, [users, searchQuery, roleFilter, statusFilter])
-
-  const handleEdit = (user: User) => {
-    setSelectedUser(user)
-    setIsEditModalOpen(true)
-  }
-
-  const handleDelete = (user: User) => {
-    setSelectedUser(user)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleToggleStatus = async (user: User) => {
-    setIsProcessing(true)
-    try {
-      const result = await toggleUserStatus(user.uid)
-
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        // Actualizar el usuario en la lista local
-        setUsers(users.map((u) => (u.uid === user.uid ? { ...u, isActive: !u.isActive } : u)))
-      } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ha ocurrido un error al cambiar el estado del usuario.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const confirmDelete = async () => {
+  // Manejar eliminación de usuario
+  const handleDeleteUser = async () => {
     if (!selectedUser) return
 
-    setIsProcessing(true)
     try {
-      const result = await deleteUser(selectedUser.uid)
+      const formData = new FormData()
+      formData.append("uid", selectedUser.uid)
+
+      const result = await deleteUser(formData)
 
       if (result.success) {
         toast({
           title: "Éxito",
-          description: result.message,
+          description: result.message || "Usuario eliminado correctamente",
         })
-        setUsers(users.filter((u) => u.uid !== selectedUser.uid))
+        loadUsers()
       } else {
         toast({
           title: "Error",
-          description: result.message,
+          description: result.error || "No se pudo eliminar el usuario",
           variant: "destructive",
         })
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Ha ocurrido un error al eliminar el usuario.",
+        description: "Ha ocurrido un error inesperado",
         variant: "destructive",
       })
     } finally {
-      setIsProcessing(false)
-      setIsDeleteDialogOpen(false)
+      setShowDeleteDialog(false)
       setSelectedUser(null)
     }
   }
 
-  const refreshData = async () => {
-    try {
-      const data = await getUsers()
-      setUsers(data)
-      setFilteredUsers(data)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron actualizar los datos.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const getRoleBadgeColor = (role: string) => {
+  // Renderizar badge de rol
+  const renderRoleBadge = (role: string) => {
     switch (role) {
       case "admin":
-        return "border-purple-500 bg-purple-50 text-purple-700"
+        return <Badge className="bg-red-500">Administrador</Badge>
       case "supervisor":
-        return "border-blue-500 bg-blue-50 text-blue-700"
+        return <Badge className="bg-orange-500">Supervisor</Badge>
       case "tecnico":
-        return "border-green-500 bg-green-50 text-green-700"
+        return <Badge className="bg-blue-500">Técnico</Badge>
       case "operador":
-        return "border-amber-500 bg-amber-50 text-amber-700"
+        return <Badge className="bg-green-500">Operador</Badge>
       default:
-        return "border-gray-500 bg-gray-50 text-gray-700"
+        return <Badge className="bg-gray-500">Invitado</Badge>
     }
   }
 
-  const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "Administrador"
-      case "supervisor":
-        return "Supervisor"
-      case "tecnico":
-        return "Técnico"
-      case "operador":
-        return "Operador"
-      case "invitado":
-        return "Invitado"
-      default:
-        return role
-    }
-  }
-
-  // Si el usuario no es administrador, no mostrar la página
+  // Si no es administrador, mostrar mensaje de acceso denegado
   if (!isAdmin && !isLoading) {
-    return null
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <UserCog className="mx-auto h-12 w-12 text-red-500" />
+              <h2 className="mt-2 text-lg font-medium">Acceso denegado</h2>
+              <p className="mt-1 text-sm text-gray-500">No tienes permisos para acceder a esta página.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-optilab-blue">Gestión de Usuarios</h1>
-        <Button className="bg-optilab-blue hover:bg-optilab-blue/90" onClick={() => setIsAddModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Usuario
-        </Button>
-      </div>
-
+    <div className="container mx-auto py-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Usuarios del Sistema</CardTitle>
-          <CardDescription>Administre los usuarios y sus permisos</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Gestión de Usuarios</CardTitle>
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Nuevo Usuario
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex flex-wrap items-center gap-4">
-            <div className="relative flex-1">
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
               <Input
                 placeholder="Buscar usuarios..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
             </div>
-            <select
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-            >
-              <option value="">Todos los roles</option>
-              <option value="admin">Administrador</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="tecnico">Técnico</option>
-              <option value="operador">Operador</option>
-              <option value="invitado">Invitado</option>
-            </select>
-            <select
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Todos los estados</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Inactivos</option>
-            </select>
           </div>
 
           {isLoading ? (
-            <div className="flex h-40 items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-optilab-blue border-t-transparent"></div>
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
             </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No se encontraron usuarios</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Último Acceso</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      {users.length === 0
-                        ? "No hay usuarios registrados."
-                        : "No se encontraron usuarios que coincidan con los filtros."}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <TableRow key={user.uid}>
-                      <TableCell className="font-medium">{user.email}</TableCell>
-                      <TableCell>
-                        {user.firstName} {user.lastName}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getRoleBadgeColor(user.role)}>
-                          {getRoleDisplayName(user.role)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            user.isActive
-                              ? "border-green-500 bg-green-50 text-green-700"
-                              : "border-red-500 bg-red-50 text-red-700"
-                          }
-                        >
-                          {user.isActive ? "Activo" : "Inactivo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : "Nunca"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(user)} className="h-8 w-8 p-0">
-                            <Pencil className="h-4 w-4 text-optilab-blue" />
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-4 py-3 text-left">Nombre</th>
+                    <th className="px-4 py-3 text-left">Correo</th>
+                    <th className="px-4 py-3 text-left">Rol</th>
+                    <th className="px-4 py-3 text-left">Estado</th>
+                    <th className="px-4 py-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user.uid} className="border-b hover:bg-gray-50">
+                      <td className="px-4 py-3">{user.displayName}</td>
+                      <td className="px-4 py-3">{user.email}</td>
+                      <td className="px-4 py-3">{renderRoleBadge(user.role)}</td>
+                      <td className="px-4 py-3">
+                        {user.disabled ? (
+                          <Badge variant="outline" className="text-red-500 border-red-500">
+                            Desactivado
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-green-500 border-green-500">
+                            Activo
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user)
+                              setShowEditModal(true)
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
                             <span className="sr-only">Editar</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleToggleStatus(user)}
-                            className="h-8 w-8 p-0"
-                            disabled={isProcessing || user.uid === currentUser?.uid}
-                          >
-                            <ToggleLeft className="h-4 w-4 text-amber-500" />
-                            <span className="sr-only">Cambiar estado</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(user)}
-                            className="h-8 w-8 p-0"
-                            disabled={isProcessing || user.uid === currentUser?.uid}
+                            onClick={() => {
+                              setSelectedUser(user)
+                              setShowDeleteDialog(true)
+                            }}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                             <span className="sr-only">Eliminar</span>
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Modal para agregar usuario */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Agregar Nuevo Usuario" size="lg">
-        <UserForm onClose={() => setIsAddModalOpen(false)} onSuccess={refreshData} />
+      {/* Modal para crear usuario */}
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Crear nuevo usuario">
+        <UserForm
+          onSuccess={() => {
+            setShowCreateModal(false)
+            loadUsers()
+          }}
+          onCancel={() => setShowCreateModal(false)}
+        />
       </Modal>
 
       {/* Modal para editar usuario */}
-      {selectedUser && (
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => {
-            setIsEditModalOpen(false)
-            setSelectedUser(null)
-          }}
-          title="Editar Usuario"
-          size="lg"
-        >
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Editar usuario">
+        {selectedUser && (
           <UserForm
-            user={{
-              uid: selectedUser.uid,
-              email: selectedUser.email,
-              firstName: selectedUser.firstName,
-              lastName: selectedUser.lastName,
-              role: selectedUser.role,
-              isActive: selectedUser.isActive,
-            }}
-            isEditing
-            onClose={() => {
-              setIsEditModalOpen(false)
+            user={selectedUser}
+            onSuccess={() => {
+              setShowEditModal(false)
+              loadUsers()
               setSelectedUser(null)
             }}
-            onSuccess={refreshData}
+            onCancel={() => {
+              setShowEditModal(false)
+              setSelectedUser(null)
+            }}
           />
-        </Modal>
-      )}
+        )}
+      </Modal>
 
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmDialog
-        isOpen={isDeleteDialogOpen}
+        isOpen={showDeleteDialog}
         onClose={() => {
-          setIsDeleteDialogOpen(false)
+          setShowDeleteDialog(false)
           setSelectedUser(null)
         }}
-        onConfirm={confirmDelete}
-        title="Eliminar Usuario"
-        message={`¿Está seguro que desea eliminar al usuario "${selectedUser?.email}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        isLoading={isProcessing}
+        onConfirm={handleDeleteUser}
+        title="Eliminar usuario"
+        description={`¿Estás seguro de que deseas eliminar al usuario ${selectedUser?.displayName}? Esta acción no se puede deshacer.`}
       />
     </div>
   )

@@ -1,5 +1,12 @@
+import { Suspense } from "react"
 import { LoginForm } from "@/components/login-form"
 import Image from "next/image"
+
+// Componente que usa useSearchParams (si es necesario)
+function SearchParamsComponent() {
+  "use client"
+  return null // Este componente no hace nada, solo está aquí para la estructura
+}
 
 export default function Home() {
   return (
@@ -9,7 +16,10 @@ export default function Home() {
           <Image src="/images/logo.png" alt="Beritch By Optilab Logo" width={300} height={100} className="mb-6" />
           <h2 className="text-2xl font-bold text-optilab-blue">Sistema de Gestión de Laboratorio</h2>
         </div>
-        <LoginForm />
+        <Suspense fallback={<div>Cargando...</div>}>
+          <LoginForm />
+          <SearchParamsComponent />
+        </Suspense>
       </div>
     </div>
   )

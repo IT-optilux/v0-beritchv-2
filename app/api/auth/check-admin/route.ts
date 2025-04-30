@@ -12,16 +12,28 @@ export async function GET() {
 
     try {
       // Verificar el token con Firebase Admin
-      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true).catch((error) => {
+        console.error("Error al verificar la cookie de sesión:", error)
+        return null
+      })
+
+      if (!decodedClaims) {
+        return NextResponse.json({ isAdmin: false, error: "Sesión inválida" }, { status: 401 })
+      }
 
       // Verificar si el usuario es administrador
-      const userRecord = await auth.getUser(decodedClaims.uid)
-      const customClaims = userRecord.customClaims || {}
+      try {
+        const userRecord = await auth.getUser(decodedClaims.uid)
+        const customClaims = userRecord.customClaims || {}
 
-      // Comprobar si el usuario tiene el rol de administrador
-      const isAdmin = customClaims.role === "admin"
+        // Comprobar si el usuario tiene el rol de administrador
+        const isAdmin = customClaims.role === "admin"
 
-      return NextResponse.json({ isAdmin })
+        return NextResponse.json({ isAdmin })
+      } catch (userError) {
+        console.error("Error al obtener información del usuario:", userError)
+        return NextResponse.json({ isAdmin: false, error: "Usuario no encontrado" }, { status: 404 })
+      }
     } catch (firebaseError) {
       console.error("Error de Firebase:", firebaseError)
       return NextResponse.json({ isAdmin: false, error: "Error de autenticación" }, { status: 401 })

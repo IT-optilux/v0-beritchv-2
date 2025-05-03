@@ -13,6 +13,8 @@ import {
   Timestamp,
   type DocumentData,
   type QueryDocumentSnapshot,
+  setDoc,
+  limit,
 } from "firebase/firestore"
 import { firestore } from "./firebase-client"
 import type { Machine, InventoryItem, Maintenance, Report, UsageLog, Notification } from "@/types"
@@ -567,344 +569,101 @@ export const notificationService = {
   },
 }
 
-// Función para inicializar la base de datos con datos de ejemplo
-export async function initializeFirestoreData() {
-  // Verificar si ya hay datos
-  const machinesSnapshot = await getDocs(collection(firestore, "machines"))
-  if (!machinesSnapshot.empty) {
-    console.log("La base de datos ya está inicializada")
-    return
-  }
-
-  console.log("Inicializando base de datos con datos de ejemplo...")
-
-  // Crear máquinas de ejemplo
-  const machines = [
+// Datos de ejemplo para inicializar Firestore
+const sampleData = {
+  inventory: [
+    { id: "inv1", name: "Lente CR-39", category: "Lentes", quantity: 100, minStock: 20, unit: "unidades" },
+    { id: "inv2", name: "Lente Policarbonato", category: "Lentes", quantity: 75, minStock: 15, unit: "unidades" },
+    { id: "inv3", name: "Montura Acetato", category: "Monturas", quantity: 50, minStock: 10, unit: "unidades" },
+  ],
+  machines: [
     {
+      id: "mach1",
       name: "Biseladora Automática",
-      model: "OptiEdge 5000",
-      serialNumber: "BE5000-123456",
-      manufacturer: "OptiTech",
+      model: "BA-2000",
       status: "Operativa",
-      location: "Área de Producción 1",
-      purchaseDate: "2022-01-15",
-      lastMaintenance: "2023-03-10",
-      nextMaintenance: "2023-06-10",
-      description: "Biseladora automática para lentes oftálmicos",
+      lastMaintenance: new Date().toISOString(),
     },
     {
-      name: "Bloqueadora Digital",
-      model: "BlockMaster 3000",
-      serialNumber: "BM3000-789012",
-      manufacturer: "LensEquip",
+      id: "mach2",
+      name: "Frontofocómetro Digital",
+      model: "FD-500",
       status: "Operativa",
-      location: "Área de Producción 1",
-      purchaseDate: "2022-02-20",
-      lastMaintenance: "2023-02-15",
-      nextMaintenance: "2023-05-15",
-      description: "Bloqueadora digital para preparación de lentes",
+      lastMaintenance: new Date().toISOString(),
     },
+  ],
+  maintenance: [
     {
-      name: "Trazadora Computarizada",
-      model: "TracerPro X1",
-      serialNumber: "TPX1-345678",
-      manufacturer: "OptiScan",
-      status: "Mantenimiento",
-      location: "Área de Trazado",
-      purchaseDate: "2021-11-05",
-      lastMaintenance: "2023-04-01",
-      nextMaintenance: "2023-07-01",
-      description: "Trazadora computarizada para marcos de lentes",
-    },
-    {
-      name: "Horno de Templado",
-      model: "TempMaster 2500",
-      serialNumber: "TM2500-901234",
-      manufacturer: "GlassTech",
-      status: "Operativa",
-      location: "Área de Tratamientos",
-      purchaseDate: "2022-03-10",
-      lastMaintenance: "2023-03-25",
-      nextMaintenance: "2023-06-25",
-      description: "Horno para templado de lentes",
-    },
-    {
-      name: "Pulidora Automática",
-      model: "PolishPro 1000",
-      serialNumber: "PP1000-567890",
-      manufacturer: "OptiPolish",
-      status: "Operativa",
-      location: "Área de Pulido",
-      purchaseDate: "2022-04-05",
-      lastMaintenance: "2023-04-10",
-      nextMaintenance: "2023-07-10",
-      description: "Pulidora automática para acabado de lentes",
-    },
-  ]
-
-  // Crear ítems de inventario de ejemplo
-  const inventoryItems = [
-    {
-      name: "Moldes CR-39",
-      category: "Moldes",
-      quantity: 150,
-      minQuantity: 50,
-      location: "Almacén A",
-      lastUpdated: "2023-04-01",
-      status: "En stock",
-      description: "Moldes para lentes CR-39 estándar",
-      unitPrice: 15.5,
-      supplier: "OptiSupplies Inc.",
-      tipo_de_item: "consumible",
-    },
-    {
-      name: "Moldes Policarbonato",
-      category: "Moldes",
-      quantity: 80,
-      minQuantity: 30,
-      location: "Almacén A",
-      lastUpdated: "2023-04-02",
-      status: "En stock",
-      description: "Moldes para lentes de policarbonato",
-      unitPrice: 22.75,
-      supplier: "PolyVision Ltd.",
-      tipo_de_item: "consumible",
-    },
-    {
-      name: "Bloques de Aleación",
-      category: "Bloques",
-      quantity: 25,
-      minQuantity: 20,
-      location: "Almacén B",
-      lastUpdated: "2023-04-03",
-      status: "Bajo stock",
-      description: "Bloques de aleación para fijación",
-      unitPrice: 8.25,
-      supplier: "MetalOptics Co.",
-      tipo_de_item: "consumible",
-    },
-    {
-      name: "Cinta Adhesiva",
-      category: "Consumibles",
-      quantity: 45,
-      minQuantity: 15,
-      location: "Almacén C",
-      lastUpdated: "2023-04-05",
-      status: "En stock",
-      description: "Cinta adhesiva especial para laboratorio",
-      unitPrice: 5.99,
-      supplier: "AdhesivePro",
-      tipo_de_item: "consumible",
-    },
-    {
-      name: "Líquido Pulidor",
-      category: "Químicos",
-      quantity: 10,
-      minQuantity: 15,
-      location: "Almacén D",
-      lastUpdated: "2023-04-06",
-      status: "Bajo stock",
-      description: "Líquido para pulido de lentes",
-      unitPrice: 32.5,
-      supplier: "ChemLens Solutions",
-      tipo_de_item: "consumible",
-    },
-    {
-      name: "Repuestos Biseladora",
-      category: "Repuestos",
-      quantity: 0,
-      minQuantity: 5,
-      location: "Almacén B",
-      lastUpdated: "2023-04-07",
-      status: "Sin stock",
-      description: "Kit de repuestos para biseladora",
-      unitPrice: 120.0,
-      supplier: "OptiTech",
-      tipo_de_item: "repuesto general",
-    },
-    {
-      name: "Disco de Corte",
-      category: "Repuestos",
-      quantity: 5,
-      minQuantity: 3,
-      location: "Almacén B",
-      lastUpdated: "2023-04-08",
-      status: "En stock",
-      description: "Disco de corte para biseladora",
-      unitPrice: 85.0,
-      supplier: "OptiTech",
-      tipo_de_item: "pieza de desgaste",
-      unidad_de_uso: "Cortes",
-      vida_util_maxima: 25000,
-      lifespanUnit: "Cortes",
-      lifespan: 25000,
-    },
-  ]
-
-  // Crear mantenimientos de ejemplo
-  const maintenances = [
-    {
-      machineId: 1,
-      machineName: "Biseladora Automática",
-      maintenanceType: "Preventivo",
-      description: "Mantenimiento preventivo programado",
-      startDate: "2023-04-15",
-      endDate: "2023-04-15",
+      id: "maint1",
+      machineId: "mach1",
+      type: "Preventivo",
       status: "Completado",
-      technician: "Carlos Técnico",
-      cost: 250.0,
-      observations: "Se realizó limpieza general y ajuste de parámetros",
+      date: new Date().toISOString(),
+      technician: "Juan Pérez",
+      notes: "Mantenimiento de rutina",
+    },
+  ],
+  usageLogs: [
+    {
+      id: "log1",
+      machineId: "mach1",
+      operatorId: "user1",
+      startTime: new Date(Date.now() - 3600000).toISOString(),
+      endTime: new Date().toISOString(),
+      notes: "Operación normal",
+    },
+  ],
+  users: [
+    {
+      id: "user1",
+      email: "admin@example.com",
+      name: "Administrador",
+      role: "admin",
+      createdAt: new Date().toISOString(),
     },
     {
-      machineId: 2,
-      machineName: "Bloqueadora Digital",
-      maintenanceType: "Correctivo",
-      description: "Reparación de sistema de bloqueo",
-      startDate: "2023-04-10",
-      status: "En proceso",
-      technician: "Luis Mantenimiento",
+      id: "user2",
+      email: "tecnico@example.com",
+      name: "Técnico",
+      role: "technician",
+      createdAt: new Date().toISOString(),
     },
-    {
-      machineId: 3,
-      machineName: "Trazadora Computarizada",
-      maintenanceType: "Calibración",
-      description: "Calibración de sensores",
-      startDate: "2023-04-20",
-      status: "Programado",
-      technician: "Ana Técnico",
-    },
-  ]
+  ],
+}
 
-  // Crear reportes de ejemplo
-  const reports = [
-    {
-      machineId: 3,
-      machineName: "Trazadora Computarizada",
-      reportType: "Falla",
-      description: "Error en el sistema de trazado, no reconoce patrones",
-      reportedBy: "Juan Pérez",
-      reportDate: "2023-04-10",
-      status: "Pendiente",
-      priority: "Alta",
-      assignedTo: "Carlos Técnico",
-    },
-    {
-      machineId: 2,
-      machineName: "Bloqueadora Digital",
-      reportType: "Mantenimiento",
-      description: "Mantenimiento preventivo programado",
-      reportedBy: "María López",
-      reportDate: "2023-04-08",
-      status: "En proceso",
-      priority: "Media",
-      assignedTo: "Luis Mantenimiento",
-    },
-    {
-      machineId: 1,
-      machineName: "Biseladora Automática",
-      reportType: "Calibración",
-      description: "Requiere calibración de precisión",
-      reportedBy: "Carlos Rodríguez",
-      reportDate: "2023-04-05",
-      status: "Completado",
-      priority: "Baja",
-      completedDate: "2023-04-07",
-      resolution: "Se realizó calibración y ajuste de parámetros",
-      assignedTo: "Ana Técnico",
-    },
-  ]
+// Función para inicializar datos en Firestore
+export async function initializeFirestoreData() {
+  try {
+    if (!firestore) {
+      console.error("Firestore no está inicializado")
+      return
+    }
 
-  // Crear registros de uso de ejemplo
-  const usageLogs = [
-    {
-      equipo_id: 1,
-      equipo_nombre: "Biseladora Automática",
-      item_inventario_id: 7,
-      item_inventario_nombre: "Disco de Corte",
-      fecha: "2023-04-10",
-      cantidad_usada: 500,
-      unidad_de_uso: "Cortes",
-      responsable: "Juan Pérez",
-      comentarios: "Uso normal durante la semana",
-      created_at: "2023-04-10T15:30:00",
-    },
-    {
-      equipo_id: 2,
-      equipo_nombre: "Bloqueadora Digital",
-      item_inventario_id: 4,
-      item_inventario_nombre: "Cinta Adhesiva",
-      fecha: "2023-04-11",
-      cantidad_usada: 15,
-      unidad_de_uso: "Unidades",
-      responsable: "María López",
-      comentarios: "Reemplazo de cinta adhesiva",
-      created_at: "2023-04-11T10:15:00",
-    },
-    {
-      equipo_id: 3,
-      equipo_nombre: "Trazadora Computarizada",
-      item_inventario_id: 5,
-      item_inventario_nombre: "Líquido Pulidor",
-      fecha: "2023-04-12",
-      cantidad_usada: 0.5,
-      unidad_de_uso: "Litros",
-      responsable: "Carlos Rodríguez",
-      created_at: "2023-04-12T14:45:00",
-    },
-  ]
+    console.log("Inicializando datos en Firestore...")
 
-  // Crear notificaciones de ejemplo
-  const notifications = [
-    {
-      type: "maintenance_alert",
-      title: "Mantenimiento programado",
-      message: "Mantenimiento programado para Trazadora Computarizada en 2 días",
-      severity: "medium",
-      relatedId: "3",
-      read: false,
-    },
-    {
-      type: "inventory_alert",
-      title: "Stock bajo",
-      message: "El ítem Bloques de Aleación está por debajo del nivel mínimo",
-      severity: "high",
-      relatedId: "3",
-      read: false,
-    },
-    {
-      type: "report_alert",
-      title: "Nuevo reporte de falla",
-      message: "Se ha reportado una falla en Trazadora Computarizada",
-      severity: "high",
-      relatedId: "1",
-      read: true,
-    },
-  ]
+    // Verificar si ya hay datos en Firestore
+    const inventoryQuery = query(collection(firestore, "inventory"), limit(1))
+    const inventorySnapshot = await getDocs(inventoryQuery)
 
-  // Guardar datos en Firestore
-  for (const machine of machines) {
-    await machineService.create(machine)
+    if (!inventorySnapshot.empty) {
+      console.log("Firestore ya contiene datos, omitiendo inicialización")
+      return
+    }
+
+    // Inicializar datos de ejemplo
+    for (const collectionName in sampleData) {
+      const collectionRef = collection(firestore, collectionName)
+
+      for (const item of sampleData[collectionName]) {
+        await setDoc(doc(collectionRef, item.id), item)
+      }
+
+      console.log(`Colección ${collectionName} inicializada`)
+    }
+
+    console.log("Inicialización de datos completada")
+  } catch (error) {
+    console.error("Error al inicializar datos en Firestore:", error)
+    throw error
   }
-
-  for (const item of inventoryItems) {
-    await inventoryService.create(item)
-  }
-
-  for (const maintenance of maintenances) {
-    await maintenanceService.create(maintenance)
-  }
-
-  for (const report of reports) {
-    await reportService.create(report)
-  }
-
-  for (const log of usageLogs) {
-    await usageLogService.create(log)
-  }
-
-  for (const notification of notifications) {
-    await notificationService.create(notification)
-  }
-
-  console.log("Base de datos inicializada con éxito")
 }

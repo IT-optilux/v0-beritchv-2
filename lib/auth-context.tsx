@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { onAuthStateChanged, type User } from "firebase/auth"
-import { auth } from "@/lib/firebase-client"
 import { useRouter, usePathname } from "next/navigation"
+import { auth } from "@/lib/firebase-client"
 
 interface AuthContextType {
   user: User | null
@@ -27,7 +27,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
+    // Verificar que estamos en el cliente
+    if (typeof window === "undefined") {
+      return () => {}
+    }
+
+    // Verificar que auth está disponible
+    if (!auth) {
+      console.error("Firebase Auth no está disponible")
+      setLoading(false)
+      return () => {}
+    }
+
+    console.log("Setting up auth state listener")
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser ? "User logged in" : "No user")
+
       if (firebaseUser) {
         // Usuario autenticado en Firebase
         setUser(firebaseUser)
@@ -55,7 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    return () => {
+      console.log("Cleaning up auth state listener")
+      unsubscribe()
+    }
   }, [router, pathname])
 
   return <AuthContext.Provider value={{ user, loading, isAdmin }}>{children}</AuthContext.Provider>

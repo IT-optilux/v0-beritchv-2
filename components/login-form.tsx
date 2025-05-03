@@ -4,13 +4,12 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { signInWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase-client"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase-client"
 import { Loader2 } from "lucide-react"
 
 export function LoginForm() {
@@ -18,48 +17,58 @@ export function LoginForm() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectUrl = searchParams?.get("redirect") || "/dashboard"
+  const { toast } = useToast()
+  const redirect = searchParams?.get("redirect") || "/dashboard"
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    try {
-      // Iniciar sesión con Firebase
-      await signInWithEmailAndPassword(auth, email, password).catch((firebaseError) => {
-        console.error("Firebase authentication error:", firebaseError)
-
-        // Manejar errores específicos de Firebase Auth
-        if (firebaseError.code === "auth/user-not-found" || firebaseError.code === "auth/wrong-password") {
-          throw new Error("Credenciales inválidas. Por favor, verifique su email y contraseña.")
-        } else if (firebaseError.code === "auth/too-many-requests") {
-          throw new Error("Demasiados intentos fallidos. Por favor, inténtelo más tarde.")
-        } else {
-          throw new Error("Error al iniciar sesión con Firebase: " + firebaseError.message)
-        }
-      })
-
-      // Inicio de sesión exitoso
+    // Verificar que auth está disponible
+    if (!auth) {
+      setError("El servicio de autenticación no está disponible")
+      setIsLoading(false)
       toast({
-        title: "Inicio de sesión exitoso",
-        description: "Redirigiendo al dashboard...",
+        title: "Error",
+        description: "No se pudo inicializar la autenticación",
+        variant: "destructive",
       })
+      return
+    }
+
+    try {
+      // Iniciar sesión con Firebase Auth
+      await signInWithEmailAndPassword(auth, email, password)
 
       // Redirigir al usuario
-      router.push(redirectUrl)
-    } catch (error: any) {
-      console.error("Login error:", error)
+      toast({
+        title: "Inicio de sesión exitoso",
+        description: "Has iniciado sesión correctamente",
+      })
 
-      // Mostrar el error en la interfaz
-      setError(error.message || "Error al iniciar sesión. Por favor, inténtelo de nuevo.")
+      router.push(redirect)
+    } catch (error: any) {
+      console.error("Error al iniciar sesión:", error)
+
+      let errorMessage = "Error al iniciar sesión. Por favor, intenta de nuevo."
+
+      // Mensajes de error más específicos
+      if (error.code === "auth/invalid-credential") {
+        errorMessage = "Credenciales inválidas. Verifica tu correo y contraseña."
+      } else if (error.code === "auth/user-not-found") {
+        errorMessage = "Usuario no encontrado."
+      } else if (error.code === "auth/wrong-password") {
+        errorMessage = "Contraseña incorrecta."
+      }
+
+      setError(errorMessage)
 
       toast({
-        title: "Error de autenticación",
-        description: error.message || "No se pudo iniciar sesión",
+        title: "Error",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -68,10 +77,10 @@ export function LoginForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border bg-white p-6 shadow-lg">
+    <div className="mx-auto max-w-md space-y-6 p-4">
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold">Iniciar Sesión</h1>
-        <p className="text-gray-500">Ingrese sus credenciales para acceder al sistema</p>
+        <p className="text-gray-500">Ingresa tus credenciales para acceder al sistema</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
@@ -79,7 +88,7 @@ export function LoginForm() {
           <Input
             id="email"
             type="email"
-            placeholder="ejemplo@beritchoptilab.com"
+            placeholder="correo@ejemplo.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -87,16 +96,10 @@ export function LoginForm() {
           />
         </div>
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Contraseña</Label>
-            <a href="#" className="text-sm text-blue-600 hover:underline">
-              ¿Olvidó su contraseña?
-            </a>
-          </div>
+          <Label htmlFor="password">Contraseña</Label>
           <Input
             id="password"
             type="password"
-            placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -110,7 +113,7 @@ export function LoginForm() {
           </div>
         )}
 
-        <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
+        <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

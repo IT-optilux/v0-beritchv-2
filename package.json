@@ -60,13 +60,15 @@
     "zod": "^3.24.1",
     "jspdf": "latest",
     "@testing-library/dom": "latest",
+    "@emotion/is-prop-valid": "latest",
     "jspdf-autotable": "latest",
     "xlsx": "latest",
     "@tanstack/react-virtual": "latest",
     "@testing-library/react": "latest",
     "@testing-library/jest-dom": "latest",
     "@jest/globals": "latest",
-    "firebase": "latest"
+    "firebase": "latest",
+    "framer-motion": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

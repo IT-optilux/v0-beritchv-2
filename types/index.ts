@@ -1,38 +1,24 @@
-// Tipos para máquinas/equipos
+// Tipos para Máquinas
 export interface Machine {
-  id: number
+  id: string
   name: string
   model: string
   serialNumber: string
-  status: "Operativa" | "Mantenimiento" | "Inoperativa"
-  lastMaintenance: string
-  nextMaintenance: string
-  description?: string
-  location?: string
-  purchaseDate?: string
   manufacturer?: string
-  item_inventario_asociado?: number
+  status: "Operativa" | "Mantenimiento" | "Inactiva"
+  location?: string
+  purchaseDate?: string | null
+  lastMaintenance?: string | null
+  nextMaintenance?: string | null
+  description?: string
+  item_inventario_asociado?: number | null
+  createdAt?: string
+  updatedAt?: string
 }
 
-// Tipos para reportes
-export interface Report {
-  id: number
-  machineId: number
-  machineName: string
-  reportType: "Falla" | "Mantenimiento" | "Calibración"
-  description: string
-  reportedBy: string
-  reportDate: string
-  status: "Pendiente" | "En proceso" | "Completado"
-  priority: "Alta" | "Media" | "Baja"
-  resolution?: string
-  completedDate?: string
-  assignedTo?: string
-}
-
-// Tipos para inventario
+// Tipos para Inventario
 export interface InventoryItem {
-  id: number
+  id: string
   name: string
   category: string
   quantity: number
@@ -43,26 +29,90 @@ export interface InventoryItem {
   description?: string
   unitPrice?: number
   supplier?: string
-  tipo_de_item?: "consumible" | "pieza de desgaste" | "repuesto general" // Nuevo campo: tipo de ítem
-  unidad_de_uso?: string // Nuevo campo: unidad de uso (horas, cortes, etc.)
-  vida_util_maxima?: number // Nuevo campo: vida útil máxima
-  lifespanUnit?: string // Para compatibilidad con código existente
-  lifespan?: number // Para compatibilidad con código existente
+  tipo_de_item?: "consumible" | "repuesto general" | "pieza de desgaste"
+  unidad_de_uso?: string
+  vida_util_maxima?: number
+  lifespanUnit?: string
+  lifespan?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
-// Tipos para notificaciones
+// Tipos para Mantenimientos
+export interface Maintenance {
+  id: string
+  machineId: number
+  machineName: string
+  maintenanceType: "Preventivo" | "Correctivo" | "Calibración"
+  description: string
+  startDate?: string | null
+  endDate?: string | null
+  status: "Programado" | "En proceso" | "Completado" | "Cancelado"
+  technician: string
+  cost?: number | null
+  observations?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Tipos para Reportes
+export interface Report {
+  id: string
+  machineId: number
+  machineName: string
+  reportType: "Falla" | "Mantenimiento" | "Calibración"
+  description: string
+  reportedBy: string
+  reportDate?: string | null
+  status: "Pendiente" | "En proceso" | "Completado"
+  priority: "Alta" | "Media" | "Baja"
+  assignedTo?: string
+  completedDate?: string | null
+  resolution?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Tipos para Registros de Uso
+export interface UsageLog {
+  id: number
+  equipo_id: number
+  equipo_nombre: string
+  item_inventario_id: number
+  item_inventario_nombre: string
+  fecha: string | null
+  cantidad_usada: number
+  unidad_de_uso: string
+  responsable?: string
+  comentarios?: string
+  created_at: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Tipos para Notificaciones
 export interface Notification {
   id: string
   type: string
   title: string
   message: string
-  createdAt: string
-  read: boolean
   severity: "high" | "medium" | "low"
   relatedId?: string
+  read: boolean
+  createdAt: string
+  updatedAt?: string
 }
 
-// Tipos para piezas de máquinas
+// Tipos para Usuarios
+export interface User {
+  id: string
+  email: string
+  displayName?: string
+  role: "admin" | "user" | "technician"
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface MachinePart {
   id: number
   machineId: number
@@ -75,37 +125,6 @@ export interface MachinePart {
   status: "Normal" | "Advertencia" | "Crítico"
 }
 
-// Tipo para registros de uso
-export interface UsageLog {
-  id: number
-  equipo_id: number
-  equipo_nombre: string
-  item_inventario_id: number
-  item_inventario_nombre: string
-  fecha: string
-  cantidad_usada: number
-  unidad_de_uso: string
-  responsable: string
-  comentarios?: string
-  created_at: string
-}
-
-// Nuevo tipo para mantenimientos
-export interface Maintenance {
-  id: number
-  machineId: number
-  machineName: string
-  maintenanceType: "Preventivo" | "Correctivo" | "Calibración"
-  description: string
-  startDate: string
-  endDate?: string
-  status: "Programado" | "En proceso" | "Completado" | "Cancelado"
-  technician: string
-  cost?: number
-  observations?: string
-}
-
-// Nuevo tipo para repuestos utilizados en mantenimientos
 export interface MaintenancePart {
   id: number
   mantenimiento_id: number

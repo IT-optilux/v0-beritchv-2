@@ -43,10 +43,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Para verificar el token, necesitamos usar una API Route
-  // ya que no podemos usar Firebase Admin directly en el middleware
-  // debido a las limitaciones de Edge Runtime
-
   // Permitir el acceso si hay un token (la verificación real se hará en los componentes)
   return response
 }

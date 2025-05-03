@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Bell, ChevronDown, LogOut, Search, User } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { auth } from "@/lib/firebase-client"
 
 import {
   DropdownMenu,
@@ -12,14 +14,50 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [userName, setUserName] = useState("Usuario")
   const router = useRouter()
+  const { toast } = useToast()
 
-  const handleLogout = () => {
-    router.push("/")
+  useEffect(() => {
+    // Obtener información del usuario actual
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setUserName(user.displayName || user.email?.split("@")[0] || "Usuario")
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const handleLogout = async () => {
+    try {
+      // Llamar a la API para eliminar la cookie de sesión
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      // Cerrar sesión en Firebase
+      await auth.signOut()
+
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión correctamente",
+      })
+
+      // Redirigir al login
+      router.push("/login")
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo cerrar la sesión",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -46,7 +84,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-optilab-blue text-white">
               <User className="h-5 w-5" />
             </div>
-            <span className="text-sm font-medium">Admin</span>
+            <span className="text-sm font-medium">{userName}</span>
             <ChevronDown className="h-4 w-4 text-gray-500" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

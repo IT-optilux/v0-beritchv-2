@@ -3,7 +3,10 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase-client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,48 +14,62 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
 
 export function LoginForm() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams?.get("redirect") || "/dashboard"
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setError("")
     setIsLoading(true)
 
     try {
+      // Iniciar sesión con Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+      // Obtener el token ID
+      const idToken = await userCredential.user.getIdToken()
+
+      // Enviar el token a nuestra API para crear una cookie de sesión
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ idToken }),
       })
 
       const data = await response.json()
 
-      if (response.ok) {
+      if (data.success) {
         toast({
           title: "Inicio de sesión exitoso",
           description: "Redirigiendo al dashboard...",
         })
-        router.push("/dashboard")
+
+        // Redirigir al usuario
+        router.push(redirectUrl)
       } else {
-        setError(data.message || "Error al iniciar sesión")
-        toast({
-          title: "Error de autenticación",
-          description: data.message || "Credenciales inválidas",
-          variant: "destructive",
-        })
+        throw new Error(data.message || "Error al iniciar sesión")
       }
-    } catch (error) {
-      setError("Error al conectar con el servidor")
+    } catch (error: any) {
+      console.error("Error al iniciar sesión:", error)
+
+      let errorMessage = "Error al iniciar sesión. Por favor, inténtelo de nuevo."
+
+      // Manejar errores específicos de Firebase Auth
+      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+        errorMessage = "Credenciales inválidas. Por favor, verifique su email y contraseña."
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Demasiados intentos fallidos. Por favor, inténtelo más tarde."
+      }
+
       toast({
         title: "Error",
-        description: "No se pudo conectar con el servidor",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -61,42 +78,48 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="email">Correo electrónico</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="usuario@ejemplo.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          disabled={isLoading}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
-        <Input
-          id="password"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          disabled={isLoading}
-        />
-      </div>
-      {error && <p className="text-sm text-red-500">{error}</p>}
-      <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
-        {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Iniciando sesión...
-          </>
-        ) : (
-          "Iniciar sesión"
-        )}
-      </Button>
-    </form>
+    <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border bg-white p-6 shadow-lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Correo Electrónico</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="ejemplo@beritchoptilab.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={isLoading}
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            <a href="#" className="text-sm text-blue-600 hover:underline">
+              ¿Olvidó su contraseña?
+            </a>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={isLoading}
+          />
+        </div>
+        <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Iniciando sesión...
+            </>
+          ) : (
+            "Iniciar Sesión"
+          )}
+        </Button>
+      </form>
+    </div>
   )
 }

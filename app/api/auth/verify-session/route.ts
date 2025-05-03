@@ -1,8 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { auth } from "@/lib/firebase-admin"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const sessionCookie = cookies().get("session")?.value
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         uid: decodedClaims.uid,
         email: decodedClaims.email,
         emailVerified: decodedClaims.email_verified,
-        // No incluimos información de roles ya que eliminamos el módulo de usuarios
+        role: decodedClaims.role || "invitado",
       },
     })
   } catch (error) {

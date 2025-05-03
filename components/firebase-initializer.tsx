@@ -1,71 +1,57 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { initializeFirestoreData } from "@/lib/firebase-services"
-import { Button } from "@/components/ui/button"
+import { initializeApp } from "firebase/app"
+import { getFirestore } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
+import { getStorage } from "firebase/storage"
 import { useToast } from "@/hooks/use-toast"
 
+// Configuración de Firebase
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+}
+
 export function FirebaseInitializer() {
-  const [isInitializing, setIsInitializing] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [initialized, setInitialized] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
-    // Check if data is already initialized by looking for a flag in localStorage
-    const isDataInitialized = localStorage.getItem("firebase-data-initialized") === "true"
-    setIsInitialized(isDataInitialized)
-  }, [])
-
-  const handleInitialize = async () => {
     try {
-      setIsInitializing(true)
-      setError(null)
+      // Inicializar Firebase
+      const app = initializeApp(firebaseConfig)
+      const firestore = getFirestore(app)
+      const auth = getAuth(app)
+      const storage = getStorage(app)
 
-      await initializeFirestoreData()
+      // Configurar emuladores si es necesario
+      if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
+        const { connectFirestoreEmulator } = require("firebase/firestore")
+        const { connectAuthEmulator } = require("firebase/auth")
+        const { connectStorageEmulator } = require("firebase/storage")
 
-      // Set flag in localStorage
-      localStorage.setItem("firebase-data-initialized", "true")
-      setIsInitialized(true)
+        connectFirestoreEmulator(firestore, "localhost", 8080)
+        connectAuthEmulator(auth, "http://localhost:9099")
+        connectStorageEmulator(storage, "localhost", 9199)
+      }
 
-      toast({
-        title: "Éxito",
-        description: "Datos de ejemplo inicializados correctamente",
-      })
-    } catch (err) {
-      console.error("Error initializing data:", err)
-      setError("Error al inicializar los datos. Por favor, intenta de nuevo.")
-
+      setInitialized(true)
+      console.log("Firebase initialized successfully")
+    } catch (error) {
+      console.error("Error initializing Firebase:", error)
       toast({
         title: "Error",
-        description: "No se pudieron inicializar los datos de ejemplo",
+        description: "No se pudo inicializar Firebase",
         variant: "destructive",
       })
-    } finally {
-      setIsInitializing(false)
     }
-  }
+  }, [toast])
 
-  if (isInitialized) {
-    return null
-  }
-
-  return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-md rounded-lg border bg-white p-4 shadow-lg">
-      <h3 className="mb-2 text-lg font-medium">Inicializar Datos de Ejemplo</h3>
-      <p className="mb-4 text-sm text-gray-600">
-        Para probar la aplicación, puedes inicializar la base de datos con datos de ejemplo.
-      </p>
-      {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleInitialize}
-          disabled={isInitializing}
-          className="bg-optilab-blue hover:bg-optilab-blue/90"
-        >
-          {isInitializing ? "Inicializando..." : "Inicializar Datos"}
-        </Button>
-      </div>
-    </div>
-  )
+  return null
 }

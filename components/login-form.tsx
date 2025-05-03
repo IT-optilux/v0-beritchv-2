@@ -17,6 +17,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -25,51 +26,40 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setError("")
 
     try {
       // Iniciar sesión con Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      await signInWithEmailAndPassword(auth, email, password).catch((firebaseError) => {
+        console.error("Firebase authentication error:", firebaseError)
 
-      // Obtener el token ID
-      const idToken = await userCredential.user.getIdToken()
-
-      // Enviar el token a nuestra API para crear una cookie de sesión
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
+        // Manejar errores específicos de Firebase Auth
+        if (firebaseError.code === "auth/user-not-found" || firebaseError.code === "auth/wrong-password") {
+          throw new Error("Credenciales inválidas. Por favor, verifique su email y contraseña.")
+        } else if (firebaseError.code === "auth/too-many-requests") {
+          throw new Error("Demasiados intentos fallidos. Por favor, inténtelo más tarde.")
+        } else {
+          throw new Error("Error al iniciar sesión con Firebase: " + firebaseError.message)
+        }
       })
 
-      const data = await response.json()
+      // Inicio de sesión exitoso
+      toast({
+        title: "Inicio de sesión exitoso",
+        description: "Redirigiendo al dashboard...",
+      })
 
-      if (data.success) {
-        toast({
-          title: "Inicio de sesión exitoso",
-          description: "Redirigiendo al dashboard...",
-        })
-
-        // Redirigir al usuario
-        router.push(redirectUrl)
-      } else {
-        throw new Error(data.message || "Error al iniciar sesión")
-      }
+      // Redirigir al usuario
+      router.push(redirectUrl)
     } catch (error: any) {
-      console.error("Error al iniciar sesión:", error)
+      console.error("Login error:", error)
 
-      let errorMessage = "Error al iniciar sesión. Por favor, inténtelo de nuevo."
-
-      // Manejar errores específicos de Firebase Auth
-      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
-        errorMessage = "Credenciales inválidas. Por favor, verifique su email y contraseña."
-      } else if (error.code === "auth/too-many-requests") {
-        errorMessage = "Demasiados intentos fallidos. Por favor, inténtelo más tarde."
-      }
+      // Mostrar el error en la interfaz
+      setError(error.message || "Error al iniciar sesión. Por favor, inténtelo de nuevo.")
 
       toast({
-        title: "Error",
-        description: errorMessage,
+        title: "Error de autenticación",
+        description: error.message || "No se pudo iniciar sesión",
         variant: "destructive",
       })
     } finally {
@@ -79,6 +69,10 @@ export function LoginForm() {
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border bg-white p-6 shadow-lg">
+      <div className="space-y-2 text-center">
+        <h1 className="text-3xl font-bold">Iniciar Sesión</h1>
+        <p className="text-gray-500">Ingrese sus credenciales para acceder al sistema</p>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Correo Electrónico</Label>
@@ -109,6 +103,13 @@ export function LoginForm() {
             disabled={isLoading}
           />
         </div>
+
+        {error && (
+          <div className="rounded-md bg-red-50 p-3">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
         <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
           {isLoading ? (
             <>

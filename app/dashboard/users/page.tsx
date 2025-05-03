@@ -1,83 +1,62 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { collection, getDocs, doc, deleteDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase-client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Modal } from "@/components/ui/modal"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import UserForm from "@/components/users/user-form"
-import { getUsers, deleteUser } from "@/app/actions/users"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Plus, Search, Trash2, Edit, UserCog } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { useAdminRequired } from "@/hooks/use-admin-required"
 
 interface User {
   uid: string
   email: string
   displayName: string
   role: string
-  disabled: boolean
-  creationTime?: string
-  lastSignInTime?: string
+  isActive: boolean
+  createdAt?: string
+  lastLogin?: string
 }
 
 export default function UsersPage() {
+  const { isAdmin, loading: authLoading } = useAdminRequired()
   const { toast } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
-  // Verificar si el usuario es administrador
-  useEffect(() => {
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch("/api/auth/check-admin")
-        const data = await response.json()
-
-        setIsAdmin(data.isAdmin)
-
-        if (!data.isAdmin) {
-          toast({
-            title: "Acceso denegado",
-            description: "No tienes permisos para acceder a esta página",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
-        console.error("Error al verificar permisos:", error)
-        setIsAdmin(false)
-      }
-    }
-
-    checkAdmin()
-  }, [toast])
-
   // Cargar usuarios
   const loadUsers = async () => {
+    if (authLoading || !isAdmin) return
+
     setIsLoading(true)
     try {
-      const result = await getUsers()
-      if (result.success) {
-        setUsers(result.users || [])
-        setFilteredUsers(result.users || [])
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "No se pudieron cargar los usuarios",
-          variant: "destructive",
-        })
-      }
+      const usersCollection = collection(db, "users")
+      const usersSnapshot = await getDocs(usersCollection)
+      const usersList = usersSnapshot.docs.map(
+        (doc) =>
+          ({
+            uid: doc.id,
+            ...doc.data(),
+          }) as User,
+      )
+
+      setUsers(usersList)
+      setFilteredUsers(usersList)
     } catch (error) {
+      console.error("Error al cargar usuarios:", error)
       toast({
         title: "Error",
-        description: "Ha ocurrido un error inesperado",
+        description: "No se pudieron cargar los usuarios",
         variant: "destructive",
       })
     } finally {
@@ -89,7 +68,7 @@ export default function UsersPage() {
     if (isAdmin) {
       loadUsers()
     }
-  }, [isAdmin])
+  }, [isAdmin, authLoading])
 
   // Filtrar usuarios
   useEffect(() => {
@@ -100,9 +79,9 @@ export default function UsersPage() {
       setFilteredUsers(
         users.filter(
           (user) =>
-            user.displayName.toLowerCase().includes(term) ||
-            user.email.toLowerCase().includes(term) ||
-            user.role.toLowerCase().includes(term),
+            user.displayName?.toLowerCase().includes(term) ||
+            user.email?.toLowerCase().includes(term) ||
+            user.role?.toLowerCase().includes(term),
         ),
       )
     }
@@ -113,28 +92,21 @@ export default function UsersPage() {
     if (!selectedUser) return
 
     try {
-      const formData = new FormData()
-      formData.append("uid", selectedUser.uid)
+      // Eliminar de Firestore
+      await deleteDoc(doc(db, "users", selectedUser.uid))
 
-      const result = await deleteUser(formData)
+      toast({
+        title: "Éxito",
+        description: "Usuario eliminado correctamente",
+      })
 
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message || "Usuario eliminado correctamente",
-        })
-        loadUsers()
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "No se pudo eliminar el usuario",
-          variant: "destructive",
-        })
-      }
+      // Actualizar la lista local
+      setUsers(users.filter((user) => user.uid !== selectedUser.uid))
     } catch (error) {
+      console.error("Error al eliminar usuario:", error)
       toast({
         title: "Error",
-        description: "Ha ocurrido un error inesperado",
+        description: "No se pudo eliminar el usuario",
         variant: "destructive",
       })
     } finally {
@@ -160,7 +132,7 @@ export default function UsersPage() {
   }
 
   // Si no es administrador, mostrar mensaje de acceso denegado
-  if (!isAdmin && !isLoading) {
+  if (!isAdmin && !authLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
         <Card className="w-full max-w-md">
@@ -172,6 +144,14 @@ export default function UsersPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-optilab-blue" />
       </div>
     )
   }
@@ -223,13 +203,13 @@ export default function UsersPage() {
                       <td className="px-4 py-3">{user.email}</td>
                       <td className="px-4 py-3">{renderRoleBadge(user.role)}</td>
                       <td className="px-4 py-3">
-                        {user.disabled ? (
-                          <Badge variant="outline" className="text-red-500 border-red-500">
-                            Desactivado
-                          </Badge>
-                        ) : (
+                        {user.isActive ? (
                           <Badge variant="outline" className="text-green-500 border-green-500">
                             Activo
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-red-500 border-red-500">
+                            Inactivo
                           </Badge>
                         )}
                       </td>
@@ -268,35 +248,6 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Modal para crear usuario */}
-      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Crear nuevo usuario">
-        <UserForm
-          onSuccess={() => {
-            setShowCreateModal(false)
-            loadUsers()
-          }}
-          onCancel={() => setShowCreateModal(false)}
-        />
-      </Modal>
-
-      {/* Modal para editar usuario */}
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Editar usuario">
-        {selectedUser && (
-          <UserForm
-            user={selectedUser}
-            onSuccess={() => {
-              setShowEditModal(false)
-              loadUsers()
-              setSelectedUser(null)
-            }}
-            onCancel={() => {
-              setShowEditModal(false)
-              setSelectedUser(null)
-            }}
-          />
-        )}
-      </Modal>
-
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmDialog
         isOpen={showDeleteDialog}
@@ -308,6 +259,8 @@ export default function UsersPage() {
         title="Eliminar usuario"
         description={`¿Estás seguro de que deseas eliminar al usuario ${selectedUser?.displayName}? Esta acción no se puede deshacer.`}
       />
+
+      {/* Aquí irían los modales para crear y editar usuarios */}
     </div>
   )
 }

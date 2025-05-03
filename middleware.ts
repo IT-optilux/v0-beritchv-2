@@ -4,9 +4,6 @@ import type { NextRequest } from "next/server"
 // Rutas que requieren autenticación
 const protectedRoutes = ["/dashboard"]
 
-// Rutas públicas
-const publicRoutes = ["/", "/login", "/register"]
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -25,25 +22,6 @@ export async function middleware(request: NextRequest) {
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com;",
   )
 
-  // Verificar si la ruta actual requiere autenticación
-  const requiresAuth = protectedRoutes.some((route) => pathname.startsWith(route))
-
-  // Si no requiere autenticación, permitir el acceso
-  if (!requiresAuth) {
-    return response
-  }
-
-  // Obtener el token de la cookie de sesión
-  const sessionCookie = request.cookies.get("session")?.value
-
-  // Si no hay token, redirigir al login
-  if (!sessionCookie) {
-    const url = new URL("/login", request.url)
-    url.searchParams.set("redirect", pathname)
-    return NextResponse.redirect(url)
-  }
-
-  // Permitir el acceso si hay un token (la verificación real se hará en los componentes)
   return response
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 interface SidebarProps {
   className?: string
@@ -25,23 +26,7 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
   const [expanded, setExpanded] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
-
-  useEffect(() => {
-    // Verificar si el usuario es administrador
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch("/api/auth/check-admin")
-        const data = await response.json()
-        setIsAdmin(data.isAdmin)
-      } catch (error) {
-        console.error("Error al verificar permisos de administrador:", error)
-        setIsAdmin(false)
-      }
-    }
-
-    checkAdmin()
-  }, [])
+  const { isAdmin } = useAuth()
 
   const mainNavItems = [
     {

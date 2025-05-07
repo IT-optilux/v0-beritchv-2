@@ -13,17 +13,29 @@ import {
   Timestamp,
   type DocumentData,
   type QueryDocumentSnapshot,
-  setDoc,
   limit,
+  writeBatch,
 } from "firebase/firestore"
 import { firestore } from "./firebase-client"
 import type { Machine, InventoryItem, Maintenance, Report, UsageLog, Notification } from "@/types"
 
+// Función para verificar si Firestore está disponible
+const isFirestoreAvailable = () => {
+  if (!firestore) {
+    console.error("Firestore no está inicializado")
+    return false
+  }
+  return true
+}
+
 // Convertidores para manejar fechas y timestamps
 const machineConverter = {
   toFirestore: (machine: Machine): DocumentData => {
+    // Eliminar el campo id para evitar duplicación
+    const { id, ...machineData } = machine
+
     return {
-      ...machine,
+      ...machineData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       lastMaintenance: machine.lastMaintenance ? Timestamp.fromDate(new Date(machine.lastMaintenance)) : null,
@@ -45,11 +57,14 @@ const machineConverter = {
 
 const inventoryItemConverter = {
   toFirestore: (item: InventoryItem): DocumentData => {
+    // Eliminar el campo id para evitar duplicación
+    const { id, ...itemData } = item
+
     return {
-      ...item,
+      ...itemData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      lastUpdated: Timestamp.fromDate(new Date(item.lastUpdated || new Date())),
+      lastUpdated: item.lastUpdated ? Timestamp.fromDate(new Date(item.lastUpdated)) : serverTimestamp(),
     }
   },
   fromFirestore: (snapshot: QueryDocumentSnapshot): InventoryItem => {
@@ -145,39 +160,76 @@ const notificationConverter = {
 // Servicios para Máquinas
 export const machineService = {
   async getAll(): Promise<Machine[]> {
-    const machinesRef = collection(firestore, "machines").withConverter(machineConverter)
-    const snapshot = await getDocs(machinesRef)
-    return snapshot.docs.map((doc) => doc.data())
+    if (!isFirestoreAvailable()) return []
+
+    try {
+      const machinesRef = collection(firestore, "machines").withConverter(machineConverter)
+      const snapshot = await getDocs(machinesRef)
+      return snapshot.docs.map((doc) => doc.data())
+    } catch (error) {
+      console.error("Error al obtener máquinas:", error)
+      return []
+    }
   },
 
   async getById(id: string): Promise<Machine | null> {
-    const machineRef = doc(firestore, "machines", id).withConverter(machineConverter)
-    const snapshot = await getDoc(machineRef)
-    return snapshot.exists() ? snapshot.data() : null
-  },
+    if (!isFirestoreAvailable()) return null
 
-  async create(machine: Omit<Machine, "id">): Promise<Machine> {
-    const machinesRef = collection(firestore, "machines").withConverter(machineConverter)
-    const docRef = await addDoc(machinesRef, machine as Machine)
-    const newMachine = await getDoc(docRef)
-    return newMachine.data() as Machine
-  },
-
-  async update(id: string, machine: Partial<Machine>): Promise<void> {
-    const machineRef = doc(firestore, "machines", id)
-    const updateData = {
-      ...machine,
-      updatedAt: serverTimestamp(),
-      lastMaintenance: machine.lastMaintenance ? Timestamp.fromDate(new Date(machine.lastMaintenance)) : undefined,
-      nextMaintenance: machine.nextMaintenance ? Timestamp.fromDate(new Date(machine.nextMaintenance)) : undefined,
-      purchaseDate: machine.purchaseDate ? Timestamp.fromDate(new Date(machine.purchaseDate)) : undefined,
+    try {
+      const machineRef = doc(firestore, "machines", id).withConverter(machineConverter)
+      const snapshot = await getDoc(machineRef)
+      return snapshot.exists() ? snapshot.data() : null
+    } catch (error) {
+      console.error(`Error al obtener máquina con ID ${id}:`, error)
+      return null
     }
-    await updateDoc(machineRef, updateData)
   },
 
-  async delete(id: string): Promise<void> {
-    const machineRef = doc(firestore, "machines", id)
-    await deleteDoc(machineRef)
+  async create(machine: Omit<Machine, "id">): Promise<Machine | null> {
+    if (!isFirestoreAvailable()) return null
+
+    try {
+      const machinesRef = collection(firestore, "machines").withConverter(machineConverter)
+      const docRef = await addDoc(machinesRef, machine as Machine)
+      const newMachine = await getDoc(docRef)
+      return newMachine.exists() ? newMachine.data() : null
+    } catch (error) {
+      console.error("Error al crear máquina:", error)
+      return null
+    }
+  },
+
+  async update(id: string, machine: Partial<Machine>): Promise<boolean> {
+    if (!isFirestoreAvailable()) return false
+
+    try {
+      const machineRef = doc(firestore, "machines", id)
+      const updateData = {
+        ...machine,
+        updatedAt: serverTimestamp(),
+        lastMaintenance: machine.lastMaintenance ? Timestamp.fromDate(new Date(machine.lastMaintenance)) : undefined,
+        nextMaintenance: machine.nextMaintenance ? Timestamp.fromDate(new Date(machine.nextMaintenance)) : undefined,
+        purchaseDate: machine.purchaseDate ? Timestamp.fromDate(new Date(machine.purchaseDate)) : undefined,
+      }
+      await updateDoc(machineRef, updateData)
+      return true
+    } catch (error) {
+      console.error(`Error al actualizar máquina con ID ${id}:`, error)
+      return false
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    if (!isFirestoreAvailable()) return false
+
+    try {
+      const machineRef = doc(firestore, "machines", id)
+      await deleteDoc(machineRef)
+      return true
+    } catch (error) {
+      console.error(`Error al eliminar máquina con ID ${id}:`, error)
+      return false
+    }
   },
 
   async getByStatus(status: string): Promise<Machine[]> {
@@ -569,77 +621,15 @@ export const notificationService = {
   },
 }
 
-// Datos de ejemplo para inicializar Firestore
-const sampleData = {
-  inventory: [
-    { id: "inv1", name: "Lente CR-39", category: "Lentes", quantity: 100, minStock: 20, unit: "unidades" },
-    { id: "inv2", name: "Lente Policarbonato", category: "Lentes", quantity: 75, minStock: 15, unit: "unidades" },
-    { id: "inv3", name: "Montura Acetato", category: "Monturas", quantity: 50, minStock: 10, unit: "unidades" },
-  ],
-  machines: [
-    {
-      id: "mach1",
-      name: "Biseladora Automática",
-      model: "BA-2000",
-      status: "Operativa",
-      lastMaintenance: new Date().toISOString(),
-    },
-    {
-      id: "mach2",
-      name: "Frontofocómetro Digital",
-      model: "FD-500",
-      status: "Operativa",
-      lastMaintenance: new Date().toISOString(),
-    },
-  ],
-  maintenance: [
-    {
-      id: "maint1",
-      machineId: "mach1",
-      type: "Preventivo",
-      status: "Completado",
-      date: new Date().toISOString(),
-      technician: "Juan Pérez",
-      notes: "Mantenimiento de rutina",
-    },
-  ],
-  usageLogs: [
-    {
-      id: "log1",
-      machineId: "mach1",
-      operatorId: "user1",
-      startTime: new Date(Date.now() - 3600000).toISOString(),
-      endTime: new Date().toISOString(),
-      notes: "Operación normal",
-    },
-  ],
-  users: [
-    {
-      id: "user1",
-      email: "admin@example.com",
-      name: "Administrador",
-      role: "admin",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "user2",
-      email: "tecnico@example.com",
-      name: "Técnico",
-      role: "technician",
-      createdAt: new Date().toISOString(),
-    },
-  ],
-}
-
 // Función para inicializar datos en Firestore
 export async function initializeFirestoreData() {
-  try {
-    if (!firestore) {
-      console.error("Firestore no está inicializado")
-      return
-    }
+  if (!isFirestoreAvailable()) {
+    console.error("No se puede inicializar datos: Firestore no está disponible")
+    return false
+  }
 
-    console.log("Inicializando datos en Firestore...")
+  try {
+    console.log("Verificando si Firestore ya tiene datos...")
 
     // Verificar si ya hay datos en Firestore
     const inventoryQuery = query(collection(firestore, "inventory"), limit(1))
@@ -647,23 +637,90 @@ export async function initializeFirestoreData() {
 
     if (!inventorySnapshot.empty) {
       console.log("Firestore ya contiene datos, omitiendo inicialización")
-      return
+      return true
     }
 
-    // Inicializar datos de ejemplo
-    for (const collectionName in sampleData) {
-      const collectionRef = collection(firestore, collectionName)
+    console.log("Inicializando datos en Firestore...")
 
-      for (const item of sampleData[collectionName]) {
-        await setDoc(doc(collectionRef, item.id), item)
-      }
+    // Datos de ejemplo para inicializar
+    const machines = [
+      {
+        name: "Biseladora Automática",
+        model: "BA-2000",
+        serialNumber: "BA2000-12345",
+        status: "Operativa",
+        lastMaintenance: new Date().toISOString().split("T")[0],
+        nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        description: "Biseladora automática para lentes oftálmicos",
+        location: "Área de Producción",
+        purchaseDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        manufacturer: "OptiTech",
+      },
+      {
+        name: "Bloqueadora Digital",
+        model: "BD-500",
+        serialNumber: "BD500-67890",
+        status: "Operativa",
+        lastMaintenance: new Date().toISOString().split("T")[0],
+        nextMaintenance: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        description: "Bloqueadora digital para preparación de lentes",
+        location: "Área de Preparación",
+        purchaseDate: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        manufacturer: "LensEquip",
+      },
+    ]
 
-      console.log(`Colección ${collectionName} inicializada`)
+    const inventoryItems = [
+      {
+        name: "Moldes CR-39",
+        category: "Moldes",
+        quantity: 150,
+        minQuantity: 50,
+        location: "Almacén A",
+        lastUpdated: new Date().toISOString().split("T")[0],
+        status: "En stock",
+        description: "Moldes para lentes CR-39 estándar",
+        unitPrice: 15.5,
+        supplier: "OptiSupplies Inc.",
+        tipo_de_item: "consumible",
+      },
+      {
+        name: "Moldes Policarbonato",
+        category: "Moldes",
+        quantity: 80,
+        minQuantity: 30,
+        location: "Almacén A",
+        lastUpdated: new Date().toISOString().split("T")[0],
+        status: "En stock",
+        description: "Moldes para lentes de policarbonato",
+        unitPrice: 22.75,
+        supplier: "PolyVision Ltd.",
+        tipo_de_item: "consumible",
+      },
+    ]
+
+    // Usar batch para operaciones múltiples
+    const batch = writeBatch(firestore)
+
+    // Añadir máquinas
+    for (const machine of machines) {
+      const machineRef = doc(collection(firestore, "machines"))
+      batch.set(machineRef, machineConverter.toFirestore(machine as Machine))
     }
 
-    console.log("Inicialización de datos completada")
+    // Añadir inventario
+    for (const item of inventoryItems) {
+      const itemRef = doc(collection(firestore, "inventory"))
+      batch.set(itemRef, inventoryItemConverter.toFirestore(item as InventoryItem))
+    }
+
+    // Commit del batch
+    await batch.commit()
+
+    console.log("Inicialización de datos completada con éxito")
+    return true
   } catch (error) {
     console.error("Error al inicializar datos en Firestore:", error)
-    throw error
+    return false
   }
 }

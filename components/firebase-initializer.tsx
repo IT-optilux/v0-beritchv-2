@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { firebase } from "@/lib/firebase-client"
+import { isFirebaseInitialized } from "@/lib/firebase-client"
 import { useToast } from "@/hooks/use-toast"
 
 export function FirebaseInitializer() {
@@ -9,25 +9,28 @@ export function FirebaseInitializer() {
   const { toast } = useToast()
 
   useEffect(() => {
-    const checkFirebaseInitialization = () => {
-      if (firebase && firebase.initialized) {
-        console.log("Firebase inicializado correctamente")
-        setInitialized(true)
-      } else {
-        console.error("Firebase no se inicializó correctamente")
-        toast({
-          title: "Error de inicialización",
-          description: "No se pudo inicializar Firebase. Algunas funciones pueden no estar disponibles.",
-          variant: "destructive",
-        })
-      }
+    // Verificar que estamos en el cliente
+    if (typeof window === "undefined") {
+      return
     }
 
-    // Verificar después de un breve retraso para dar tiempo a la inicialización
-    const timer = setTimeout(checkFirebaseInitialization, 1000)
+    // Verificar si Firebase está inicializado
+    if (isFirebaseInitialized()) {
+      console.log("Firebase verificado correctamente")
+      setInitialized(true)
+      return
+    }
 
-    return () => clearTimeout(timer)
+    // Si no está inicializado, mostrar un error
+    console.error("Firebase no está inicializado correctamente")
+    toast({
+      title: "Error de conexión",
+      description: "No se pudo conectar con la base de datos. Algunas funciones pueden no estar disponibles.",
+      variant: "destructive",
+    })
   }, [toast])
 
   return null
 }
+
+export default FirebaseInitializer

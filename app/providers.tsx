@@ -1,20 +1,22 @@
 "use client"
 
-import type React from "react"
+import type { ReactNode } from "react"
 import { AuthProvider } from "@/lib/auth-context"
-import dynamic from "next/dynamic"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import { ErrorBoundary } from "@/components/error-boundary"
 
-// Importar dinámicamente para asegurar que solo se ejecuta en el cliente
-const ClientOnlyFirebaseInitializer = dynamic(
-  () => import("@/components/firebase-initializer").then((mod) => mod.FirebaseInitializer),
-  { ssr: false },
-)
-
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children }: { children: ReactNode }) {
   return (
-    <>
-      <ClientOnlyFirebaseInitializer />
-      <AuthProvider>{children}</AuthProvider>
-    </>
+    <ErrorBoundary
+      fallback={<div className="p-4">Ha ocurrido un error en la aplicación. Por favor, recarga la página.</div>}
+    >
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }

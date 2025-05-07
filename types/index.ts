@@ -5,13 +5,13 @@ export interface Machine {
   model: string
   serialNumber: string
   manufacturer?: string
-  status: "Operativa" | "Mantenimiento" | "Inactiva"
+  status: "Operativa" | "Mantenimiento" | "Inoperativa"
   location?: string
   purchaseDate?: string | null
   lastMaintenance?: string | null
   nextMaintenance?: string | null
   description?: string
-  item_inventario_asociado?: number | null
+  item_inventario_asociado?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -41,7 +41,7 @@ export interface InventoryItem {
 // Tipos para Mantenimientos
 export interface Maintenance {
   id: string
-  machineId: number
+  machineId: string
   machineName: string
   maintenanceType: "Preventivo" | "Correctivo" | "Calibración"
   description: string
@@ -58,7 +58,7 @@ export interface Maintenance {
 // Tipos para Reportes
 export interface Report {
   id: string
-  machineId: number
+  machineId: string
   machineName: string
   reportType: "Falla" | "Mantenimiento" | "Calibración"
   description: string
@@ -75,10 +75,10 @@ export interface Report {
 
 // Tipos para Registros de Uso
 export interface UsageLog {
-  id: number
-  equipo_id: number
+  id: string
+  equipo_id: string
   equipo_nombre: string
-  item_inventario_id: number
+  item_inventario_id: string
   item_inventario_nombre: string
   fecha: string | null
   cantidad_usada: number
@@ -114,9 +114,9 @@ export interface User {
 }
 
 export interface MachinePart {
-  id: number
-  machineId: number
-  inventoryItemId: number
+  id: string
+  machineId: string
+  inventoryItemId: string
   name: string
   installationDate: string
   usageType: string
@@ -126,9 +126,9 @@ export interface MachinePart {
 }
 
 export interface MaintenancePart {
-  id: number
-  mantenimiento_id: number
-  item_inventario_id: number
+  id: string
+  mantenimiento_id: string
+  item_inventario_id: string
   item_inventario_nombre: string
   cantidad_utilizada: number
   costo_unitario: number

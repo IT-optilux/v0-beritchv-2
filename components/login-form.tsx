@@ -4,12 +4,12 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { signInWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase-client"
 import { Loader2 } from "lucide-react"
 
 export function LoginForm() {
@@ -17,17 +17,16 @@ export function LoginForm() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { toast } = useToast()
-  const redirect = searchParams?.get("redirect") || "/dashboard"
+  const redirectUrl = searchParams?.get("redirect") || "/dashboard"
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    // Verificar que auth está disponible
     if (!auth) {
       setError("El servicio de autenticación no está disponible")
       setIsLoading(false)
@@ -40,34 +39,29 @@ export function LoginForm() {
     }
 
     try {
-      // Iniciar sesión con Firebase Auth
       await signInWithEmailAndPassword(auth, email, password)
-
-      // Redirigir al usuario
       toast({
         title: "Inicio de sesión exitoso",
         description: "Has iniciado sesión correctamente",
       })
-
-      router.push(redirect)
+      router.push(redirectUrl)
     } catch (error: any) {
       console.error("Error al iniciar sesión:", error)
 
-      let errorMessage = "Error al iniciar sesión. Por favor, intenta de nuevo."
-
-      // Mensajes de error más específicos
-      if (error.code === "auth/invalid-credential") {
-        errorMessage = "Credenciales inválidas. Verifica tu correo y contraseña."
-      } else if (error.code === "auth/user-not-found") {
-        errorMessage = "Usuario no encontrado."
-      } else if (error.code === "auth/wrong-password") {
-        errorMessage = "Contraseña incorrecta."
+      const errorMessages = {
+        "auth/invalid-credential": "Credenciales inválidas. Verifica tu correo y contraseña.",
+        "auth/invalid-email": "Correo electrónico inválido.",
+        "auth/user-not-found": "Usuario no encontrado.",
+        "auth/wrong-password": "Contraseña incorrecta.",
+        "auth/too-many-requests": "Demasiados intentos fallidos. Por favor, intenta más tarde.",
+        "auth/network-request-failed": "Error de conexión. Verifica tu conexión a internet.",
       }
 
+      const errorMessage = errorMessages[error.code] || "Error al iniciar sesión. Por favor, intenta de nuevo."
       setError(errorMessage)
 
       toast({
-        title: "Error",
+        title: "Error de autenticación",
         description: errorMessage,
         variant: "destructive",
       })

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Pencil, Trash2, Search } from "lucide-react"
 import type { InventoryItem } from "@/types"
+import { getInventoryItems, deleteInventoryItem } from "@/app/actions/inventory"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -15,7 +16,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { InventoryForm } from "@/components/inventory/inventory-form"
 import { QuantityAdjustmentForm } from "@/components/inventory/quantity-adjustment-form"
 import { useToast } from "@/hooks/use-toast"
-import { inventoryService } from "@/lib/firebase-services"
 
 export default function InventoryPage() {
   const { toast } = useToast()
@@ -37,12 +37,10 @@ export default function InventoryPage() {
   useEffect(() => {
     const fetchInventoryItems = async () => {
       try {
-        setIsLoading(true)
-        const data = await inventoryService.getAll()
+        const data = await getInventoryItems()
         setInventoryItems(data)
         setFilteredItems(data)
       } catch (error) {
-        console.error("Error fetching inventory items:", error)
         toast({
           title: "Error",
           description: "No se pudieron cargar los ítems de inventario.",
@@ -105,25 +103,25 @@ export default function InventoryPage() {
   const confirmDelete = async () => {
     if (!selectedItem) return
 
+    const itemToDelete = selectedItem // Capturar el valor actual
     setIsDeleting(true)
     try {
-      const success = await inventoryService.delete(selectedItem.id)
+      const result = await deleteInventoryItem(itemToDelete.id)
 
-      if (success) {
+      if (result.success) {
         toast({
           title: "Éxito",
-          description: "Ítem eliminado correctamente",
+          description: result.message,
         })
-        setInventoryItems(inventoryItems.filter((item) => item.id !== selectedItem.id))
+        setInventoryItems(inventoryItems.filter((item) => item.id !== itemToDelete.id))
       } else {
         toast({
           title: "Error",
-          description: "No se pudo eliminar el ítem",
+          description: result.message,
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Error deleting inventory item:", error)
       toast({
         title: "Error",
         description: "Ha ocurrido un error al eliminar el ítem.",
@@ -138,19 +136,15 @@ export default function InventoryPage() {
 
   const refreshData = async () => {
     try {
-      setIsLoading(true)
-      const data = await inventoryService.getAll()
+      const data = await getInventoryItems()
       setInventoryItems(data)
       setFilteredItems(data)
     } catch (error) {
-      console.error("Error refreshing inventory data:", error)
       toast({
         title: "Error",
         description: "No se pudieron actualizar los datos.",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 

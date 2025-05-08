@@ -1,24 +1,25 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, X, Check, AlertTriangle, Info, PenToolIcon as Tool } from "lucide-react"
+import { Bell, Check, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { notificationService } from "@/lib/firebase-services"
+import { Badge } from "@/components/ui/badge"
 import type { Notification } from "@/types"
-import { useToast } from "@/hooks/use-toast"
+import { getNotifications, markNotificationAsRead, deleteNotification } from "@/app/actions/notifications"
 
 export function NotificationCenter() {
-  const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const { toast } = useToast()
+
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   useEffect(() => {
     const fetchNotifications = async () => {
+      setLoading(true)
       try {
-        setLoading(true)
-        const data = await notificationService.getAll()
+        const data = await getNotifications()
         setNotifications(data)
       } catch (error) {
         console.error("Error fetching notifications:", error)
@@ -29,89 +30,40 @@ export function NotificationCenter() {
 
     fetchNotifications()
 
-    // Refresh notifications every 2 minutes
-    const interval = setInterval(fetchNotifications, 2 * 60 * 1000)
+    // Actualizar notificaciones cada minuto
+    const interval = setInterval(fetchNotifications, 60000)
     return () => clearInterval(interval)
   }, [])
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      await notificationService.markAsRead(id)
-      setNotifications(
-        notifications.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)),
-      )
+      await markNotificationAsRead(id)
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
     } catch (error) {
       console.error("Error marking notification as read:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo marcar la notificación como leída",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await notificationService.markAllAsRead()
-      setNotifications(notifications.map((notification) => ({ ...notification, read: true })))
-      toast({
-        title: "Éxito",
-        description: "Todas las notificaciones marcadas como leídas",
-      })
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron marcar todas las notificaciones como leídas",
-        variant: "destructive",
-      })
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
-      await notificationService.delete(id)
-      setNotifications(notifications.filter((notification) => notification.id !== id))
+      await deleteNotification(id)
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
     } catch (error) {
       console.error("Error deleting notification:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar la notificación",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const unreadCount = notifications.filter((notification) => !notification.read).length
-
-  const getNotificationIcon = (type: string, severity: string) => {
-    if (type === "maintenance_alert" || type === "maintenance") {
-      return <Tool className={`h-5 w-5 ${getSeverityColor(severity)}`} />
-    } else if (type === "inventory_alert" || type === "inventory") {
-      return <AlertTriangle className={`h-5 w-5 ${getSeverityColor(severity)}`} />
-    } else if (type === "report_alert" || type === "report") {
-      return <Info className={`h-5 w-5 ${getSeverityColor(severity)}`} />
-    } else {
-      return <Bell className={`h-5 w-5 ${getSeverityColor(severity)}`} />
     }
   }
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case "high":
-        return "text-red-500"
+        return "bg-red-100 text-red-800 border-red-300"
       case "medium":
-        return "text-amber-500"
+        return "bg-amber-100 text-amber-800 border-amber-300"
       case "low":
-        return "text-blue-500"
+        return "bg-blue-100 text-blue-800 border-blue-300"
       default:
-        return "text-gray-500"
+        return "bg-gray-100 text-gray-800 border-gray-300"
     }
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleString()
   }
 
   return (
@@ -119,84 +71,71 @@ export function NotificationCenter() {
       <Button
         variant="ghost"
         size="icon"
-        className="relative"
         onClick={() => setIsOpen(!isOpen)}
+        className="relative"
         aria-label="Notificaciones"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+          <Badge className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
             {unreadCount}
-          </span>
+          </Badge>
         )}
       </Button>
 
       {isOpen && (
-        <Card className="absolute right-0 top-12 z-50 w-80 sm:w-96 md:w-[450px] shadow-lg animate-in fade-in slide-in-from-top-5 duration-300">
-          <div className="flex items-center justify-between border-b p-4">
-            <h3 className="font-medium">Notificaciones</h3>
-            <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead}>
-                  <Check className="mr-1 h-4 w-4" />
-                  Marcar todas como leídas
-                </Button>
-              )}
-              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
-                <X className="h-4 w-4" />
+        <Card className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto z-50 shadow-lg">
+          <div className="p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium">Notificaciones</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)}>
+                Cerrar
               </Button>
             </div>
-          </div>
 
-          <div className="max-h-[70vh] overflow-y-auto p-2">
             {loading ? (
-              <div className="flex h-32 items-center justify-center">
-                <div className="h-6 w-6 animate-spin rounded-full border-4 border-optilab-blue border-t-transparent"></div>
-              </div>
-            ) : notifications.length > 0 ? (
-              <div className="space-y-2">
+              <div className="py-4 text-center text-gray-500">Cargando...</div>
+            ) : notifications.length === 0 ? (
+              <div className="py-4 text-center text-gray-500">No hay notificaciones</div>
+            ) : (
+              <ul className="space-y-2">
                 {notifications.map((notification) => (
-                  <div
+                  <li
                     key={notification.id}
-                    className={`flex items-start gap-3 rounded-lg p-3 transition-colors ${
-                      notification.read ? "bg-white hover:bg-gray-50" : "bg-blue-50 hover:bg-blue-100"
-                    }`}
+                    className={`p-3 border rounded-md ${notification.read ? "bg-white" : "bg-blue-50"} ${getSeverityColor(notification.severity)}`}
                   >
-                    <div className="flex-shrink-0">{getNotificationIcon(notification.type, notification.severity)}</div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <h4 className="font-medium">{notification.title}</h4>
-                        <div className="flex items-center gap-1">
-                          {!notification.read && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleMarkAsRead(notification.id)}
-                            >
-                              <Check className="h-3 w-3" />
-                            </Button>
-                          )}
+                    <div className="flex justify-between">
+                      <h4 className="font-medium text-sm">{notification.title}</h4>
+                      <div className="flex space-x-1">
+                        {!notification.read && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 text-gray-400 hover:text-red-500"
-                            onClick={() => handleDelete(notification.id)}
+                            className="h-6 w-6"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            title="Marcar como leída"
                           >
-                            <X className="h-3 w-3" />
+                            <Check className="h-4 w-4" />
                           </Button>
-                        </div>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleDelete(notification.id)}
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <p className="text-sm text-gray-600">{notification.message}</p>
-                      <p className="mt-1 text-xs text-gray-400">{formatDate(notification.createdAt)}</p>
                     </div>
-                  </div>
+                    <p className="text-xs mt-1">{notification.message}</p>
+                    <div className="text-xs text-gray-500 mt-2">
+                      {new Date(notification.createdAt).toLocaleString()}
+                    </div>
+                  </li>
                 ))}
-              </div>
-            ) : (
-              <div className="flex h-32 items-center justify-center">
-                <p className="text-center text-sm text-gray-500">No hay notificaciones</p>
-              </div>
+              </ul>
             )}
           </div>
         </Card>

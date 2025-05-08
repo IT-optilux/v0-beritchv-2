@@ -3,15 +3,15 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Edit, Clipboard, PenToolIcon as Tool, Calendar, Info, Package } from "lucide-react"
-import type { Machine, InventoryItem, Maintenance, Report } from "@/types"
-import { machineService, inventoryService, maintenanceService, reportService } from "@/lib/firebase-services"
+import type { Machine, InventoryItem } from "@/types"
+import { getMachineById } from "@/app/actions/machines"
+import { getInventoryItemById } from "@/app/actions/inventory"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Modal } from "@/components/ui/modal"
 import { MachineForm } from "@/components/machines/machine-form"
-import { ExportPdfButton } from "@/components/export-pdf-button"
 import { useToast } from "@/hooks/use-toast"
 
 export default function MachineDetailPage({ params }: { params: { id: string } }) {
@@ -19,54 +19,32 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
   const { toast } = useToast()
   const [machine, setMachine] = useState<Machine | null>(null)
   const [associatedItem, setAssociatedItem] = useState<InventoryItem | null>(null)
-  const [maintenances, setMaintenances] = useState<Maintenance[]>([])
-  const [reports, setReports] = useState<Report[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchMachine = async () => {
       try {
-        setIsLoading(true)
+        const data = await getMachineById(Number.parseInt(params.id))
+        if (data) {
+          setMachine(data)
 
-        // Fetch machine data
-        const machineData = await machineService.getById(params.id)
-        if (!machineData) {
+          // Si hay un ítem de inventario asociado, obtenerlo
+          if (data.item_inventario_asociado) {
+            try {
+              const itemData = await getInventoryItemById(data.item_inventario_asociado)
+              setAssociatedItem(itemData || null)
+            } catch (error) {
+              console.error("Error al cargar el ítem asociado:", error)
+            }
+          }
+        } else {
           toast({
             title: "Error",
             description: "Equipo no encontrado.",
             variant: "destructive",
           })
           router.push("/dashboard/machines")
-          return
-        }
-
-        setMachine(machineData)
-
-        // Fetch associated inventory item if exists
-        if (machineData.item_inventario_asociado) {
-          try {
-            const itemData = await inventoryService.getById(machineData.item_inventario_asociado.toString())
-            setAssociatedItem(itemData)
-          } catch (error) {
-            console.error("Error al cargar el ítem asociado:", error)
-          }
-        }
-
-        // Fetch maintenance history
-        try {
-          const maintenanceData = await maintenanceService.getByMachineId(Number(machineData.id))
-          setMaintenances(maintenanceData)
-        } catch (error) {
-          console.error("Error al cargar mantenimientos:", error)
-        }
-
-        // Fetch reports
-        try {
-          const reportsData = await reportService.getByMachineId(Number(machineData.id))
-          setReports(reportsData)
-        } catch (error) {
-          console.error("Error al cargar reportes:", error)
         }
       } catch (error) {
         toast({
@@ -85,26 +63,21 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
 
   const refreshData = async () => {
     try {
-      // Fetch machine data
-      const machineData = await machineService.getById(params.id)
-      if (machineData) {
-        setMachine(machineData)
+      const data = await getMachineById(Number.parseInt(params.id))
+      if (data) {
+        setMachine(data)
 
-        // Fetch associated inventory item if exists
-        if (machineData.item_inventario_asociado) {
-          const itemData = await inventoryService.getById(machineData.item_inventario_asociado.toString())
-          setAssociatedItem(itemData)
+        // Si hay un ítem de inventario asociado, obtenerlo
+        if (data.item_inventario_asociado) {
+          try {
+            const itemData = await getInventoryItemById(data.item_inventario_asociado)
+            setAssociatedItem(itemData || null)
+          } catch (error) {
+            console.error("Error al cargar el ítem asociado:", error)
+          }
         } else {
           setAssociatedItem(null)
         }
-
-        // Refresh maintenance history
-        const maintenanceData = await maintenanceService.getByMachineId(Number(machineData.id))
-        setMaintenances(maintenanceData)
-
-        // Refresh reports
-        const reportsData = await reportService.getByMachineId(Number(machineData.id))
-        setReports(reportsData)
       }
     } catch (error) {
       toast({
@@ -144,14 +117,6 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
           <h1 className="text-2xl font-bold text-optilab-blue">{machine.name}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <ExportPdfButton
-            type="machine"
-            data={machine}
-            additionalData={{ maintenances, reports }}
-            filename={`equipo_${machine.name.replace(/\s+/g, "_").toLowerCase()}.pdf`}
-            variant="outline"
-            className="hidden sm:flex"
-          />
           <Button
             variant="outline"
             onClick={() => router.push(`/dashboard/machines/${params.id}/history`)}
@@ -257,19 +222,9 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
 
         <TabsContent value="maintenance" className="space-y-6 pt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Historial de Mantenimiento</CardTitle>
-                <CardDescription>Registro de mantenimientos realizados</CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/dashboard/maintenance/new?machineId=" + machine.id)}
-              >
-                <Tool className="mr-2 h-4 w-4" />
-                Programar Mantenimiento
-              </Button>
+            <CardHeader>
+              <CardTitle>Historial de Mantenimiento</CardTitle>
+              <CardDescription>Registro de mantenimientos realizados</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4">
@@ -280,9 +235,7 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
                       <h3 className="font-medium">Último Mantenimiento</h3>
                     </div>
                     <p className="mt-1 text-sm text-gray-500">
-                      {machine.lastMaintenance
-                        ? new Date(machine.lastMaintenance).toLocaleDateString()
-                        : "No registrado"}
+                      {new Date(machine.lastMaintenance).toLocaleDateString()}
                     </p>
                   </div>
                   <div>
@@ -291,70 +244,22 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
                       <h3 className="font-medium">Próximo Mantenimiento</h3>
                     </div>
                     <p className="mt-1 text-sm text-gray-500">
-                      {machine.nextMaintenance
-                        ? new Date(machine.nextMaintenance).toLocaleDateString()
-                        : "No programado"}
+                      {new Date(machine.nextMaintenance).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
 
-                {maintenances.length > 0 ? (
-                  <div className="space-y-4">
-                    {maintenances.map((maintenance) => (
-                      <div key={maintenance.id} className="rounded-lg border p-4 hover:bg-gray-50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Tool
-                              className={`h-5 w-5 ${
-                                maintenance.maintenanceType === "Preventivo"
-                                  ? "text-blue-500"
-                                  : maintenance.maintenanceType === "Correctivo"
-                                    ? "text-red-500"
-                                    : "text-amber-500"
-                              }`}
-                            />
-                            <h3 className="font-medium">{maintenance.maintenanceType}</h3>
-                          </div>
-                          <div
-                            className={`rounded-full px-2 py-1 text-xs font-medium ${
-                              maintenance.status === "Completado"
-                                ? "bg-green-100 text-green-800"
-                                : maintenance.status === "En proceso"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {maintenance.status}
-                          </div>
-                        </div>
-                        <p className="mt-2 text-sm">{maintenance.description}</p>
-                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                          <span>Fecha: {new Date(maintenance.startDate || "").toLocaleDateString()}</span>
-                          <span>Técnico: {maintenance.technician}</span>
-                        </div>
-                        <Button
-                          variant="link"
-                          className="mt-2 h-auto p-0 text-xs text-optilab-blue"
-                          onClick={() => router.push(`/dashboard/maintenance/${maintenance.id}`)}
-                        >
-                          Ver detalles →
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border p-4">
-                    <p className="text-center text-sm text-gray-500">
-                      No hay mantenimientos registrados para este equipo.
-                    </p>
-                  </div>
-                )}
+                <div className="rounded-lg border p-4">
+                  <p className="text-center text-sm text-gray-500">
+                    El historial detallado de mantenimientos estará disponible próximamente.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Pestaña para mostrar el ítem de inventario asociado */}
+        {/* Nueva pestaña para mostrar el ítem de inventario asociado */}
         <TabsContent value="inventory" className="space-y-6 pt-4">
           <Card>
             <CardHeader>
@@ -409,7 +314,7 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
                   <div className="mt-4">
                     <Button
                       variant="outline"
-                      onClick={() => router.push(`/dashboard/inventory/${associatedItem.id}`)}
+                      onClick={() => router.push(`/dashboard/inventory`)}
                       className="text-optilab-blue hover:bg-optilab-blue/10"
                     >
                       <Package className="mr-2 h-4 w-4" />
@@ -436,70 +341,16 @@ export default function MachineDetailPage({ params }: { params: { id: string } }
 
         <TabsContent value="reports" className="space-y-6 pt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Reportes Asociados</CardTitle>
-                <CardDescription>Reportes de fallas y mantenimientos</CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/dashboard/reports/new?machineId=${machine.id}`)}
-              >
-                <Clipboard className="mr-2 h-4 w-4" />
-                Crear Reporte
-              </Button>
+            <CardHeader>
+              <CardTitle>Reportes Asociados</CardTitle>
+              <CardDescription>Reportes de fallas y mantenimientos</CardDescription>
             </CardHeader>
             <CardContent>
-              {reports.length > 0 ? (
-                <div className="space-y-4">
-                  {reports.map((report) => (
-                    <div key={report.id} className="rounded-lg border p-4 hover:bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clipboard
-                            className={`h-5 w-5 ${
-                              report.reportType === "Falla"
-                                ? "text-red-500"
-                                : report.reportType === "Mantenimiento"
-                                  ? "text-blue-500"
-                                  : "text-amber-500"
-                            }`}
-                          />
-                          <h3 className="font-medium">{report.reportType}</h3>
-                        </div>
-                        <div
-                          className={`rounded-full px-2 py-1 text-xs font-medium ${
-                            report.status === "Completado"
-                              ? "bg-green-100 text-green-800"
-                              : report.status === "En proceso"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {report.status}
-                        </div>
-                      </div>
-                      <p className="mt-2 text-sm">{report.description}</p>
-                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                        <span>Fecha: {new Date(report.reportDate || "").toLocaleDateString()}</span>
-                        <span>Reportado por: {report.reportedBy}</span>
-                      </div>
-                      <Button
-                        variant="link"
-                        className="mt-2 h-auto p-0 text-xs text-optilab-blue"
-                        onClick={() => router.push(`/dashboard/reports/${report.id}`)}
-                      >
-                        Ver detalles →
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border p-4">
-                  <p className="text-center text-sm text-gray-500">No hay reportes registrados para este equipo.</p>
-                </div>
-              )}
+              <div className="rounded-lg border p-4">
+                <p className="text-center text-sm text-gray-500">
+                  Los reportes asociados a este equipo estarán disponibles próximamente.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

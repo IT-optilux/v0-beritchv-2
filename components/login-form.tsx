@@ -6,6 +6,7 @@ import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase-client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,42 +28,38 @@ export function LoginForm() {
     setIsLoading(true)
     setError("")
 
-    if (!auth) {
-      setError("El servicio de autenticación no está disponible")
-      setIsLoading(false)
-      toast({
-        title: "Error",
-        description: "No se pudo inicializar la autenticación",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      // Iniciar sesión con Firebase
+      await signInWithEmailAndPassword(auth, email, password).catch((firebaseError) => {
+        console.error("Firebase authentication error:", firebaseError)
+
+        // Manejar errores específicos de Firebase Auth
+        if (firebaseError.code === "auth/user-not-found" || firebaseError.code === "auth/wrong-password") {
+          throw new Error("Credenciales inválidas. Por favor, verifique su email y contraseña.")
+        } else if (firebaseError.code === "auth/too-many-requests") {
+          throw new Error("Demasiados intentos fallidos. Por favor, inténtelo más tarde.")
+        } else {
+          throw new Error("Error al iniciar sesión con Firebase: " + firebaseError.message)
+        }
+      })
+
+      // Inicio de sesión exitoso
       toast({
         title: "Inicio de sesión exitoso",
-        description: "Has iniciado sesión correctamente",
+        description: "Redirigiendo al dashboard...",
       })
+
+      // Redirigir al usuario
       router.push(redirectUrl)
     } catch (error: any) {
-      console.error("Error al iniciar sesión:", error)
+      console.error("Login error:", error)
 
-      const errorMessages = {
-        "auth/invalid-credential": "Credenciales inválidas. Verifica tu correo y contraseña.",
-        "auth/invalid-email": "Correo electrónico inválido.",
-        "auth/user-not-found": "Usuario no encontrado.",
-        "auth/wrong-password": "Contraseña incorrecta.",
-        "auth/too-many-requests": "Demasiados intentos fallidos. Por favor, intenta más tarde.",
-        "auth/network-request-failed": "Error de conexión. Verifica tu conexión a internet.",
-      }
-
-      const errorMessage = errorMessages[error.code] || "Error al iniciar sesión. Por favor, intenta de nuevo."
-      setError(errorMessage)
+      // Mostrar el error en la interfaz
+      setError(error.message || "Error al iniciar sesión. Por favor, inténtelo de nuevo.")
 
       toast({
         title: "Error de autenticación",
-        description: errorMessage,
+        description: error.message || "No se pudo iniciar sesión",
         variant: "destructive",
       })
     } finally {
@@ -71,10 +68,10 @@ export function LoginForm() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-6 p-4">
+    <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border bg-white p-6 shadow-lg">
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold">Iniciar Sesión</h1>
-        <p className="text-gray-500">Ingresa tus credenciales para acceder al sistema</p>
+        <p className="text-gray-500">Ingrese sus credenciales para acceder al sistema</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
@@ -82,7 +79,7 @@ export function LoginForm() {
           <Input
             id="email"
             type="email"
-            placeholder="correo@ejemplo.com"
+            placeholder="ejemplo@beritchoptilab.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -90,10 +87,16 @@ export function LoginForm() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Contraseña</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            <a href="#" className="text-sm text-blue-600 hover:underline">
+              ¿Olvidó su contraseña?
+            </a>
+          </div>
           <Input
             id="password"
             type="password"
+            placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -107,7 +110,7 @@ export function LoginForm() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="w-full bg-optilab-blue hover:bg-optilab-blue/90" disabled={isLoading}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

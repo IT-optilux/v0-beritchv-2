@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { usageLogService } from "@/lib/firebase-services"
 import { useToast } from "@/hooks/use-toast"
+import { registrarMantenimiento } from "@/app/actions/usage-logs"
 
 interface MaintenanceFormProps {
   item: {
@@ -17,9 +17,12 @@ interface MaintenanceFormProps {
     item_inventario_id: number
     item_inventario_nombre: string
     unidad_de_uso: string
+    uso_acumulado: number
+    vida_util_maxima: number
+    porcentaje_uso: number
   }
   onClose: () => void
-  onSuccess: () => void
+  onSuccess?: () => void
 }
 
 export function MaintenanceForm({ item, onClose, onSuccess }: MaintenanceFormProps) {
@@ -30,31 +33,37 @@ export function MaintenanceForm({ item, onClose, onSuccess }: MaintenanceFormPro
     e.preventDefault()
     setIsSubmitting(true)
 
+    const formData = new FormData(e.currentTarget)
+    formData.append("equipo_id", item.equipo_id.toString())
+    formData.append("equipo_nombre", item.equipo_nombre)
+    formData.append("item_inventario_id", item.item_inventario_id.toString())
+    formData.append("item_inventario_nombre", item.item_inventario_nombre)
+    formData.append("unidad_de_uso", item.unidad_de_uso)
+
     try {
-      const formData = new FormData(e.currentTarget)
+      const result = await registrarMantenimiento(formData)
 
-      const data = {
-        equipo_nombre: item.equipo_nombre,
-        item_inventario_nombre: item.item_inventario_nombre,
-        fecha: formData.get("fecha") as string,
-        unidad_de_uso: item.unidad_de_uso,
-        responsable: formData.get("responsable") as string,
-        comentarios: formData.get("comentarios") as string,
+      if (result.success) {
+        toast({
+          title: "Éxito",
+          description: result.message,
+        })
+
+        if (onSuccess) {
+          onSuccess()
+        }
+        onClose()
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Ha ocurrido un error al registrar el mantenimiento.",
+          variant: "destructive",
+        })
       }
-
-      await usageLogService.registrarMantenimiento(item.equipo_id, item.item_inventario_id, data)
-
-      toast({
-        title: "Éxito",
-        description: "Mantenimiento registrado correctamente",
-      })
-
-      onSuccess()
     } catch (error) {
-      console.error("Error al registrar mantenimiento:", error)
       toast({
         title: "Error",
-        description: "No se pudo registrar el mantenimiento",
+        description: "Ha ocurrido un error al procesar la solicitud.",
         variant: "destructive",
       })
     } finally {
@@ -63,28 +72,43 @@ export function MaintenanceForm({ item, onClose, onSuccess }: MaintenanceFormPro
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-        <h3 className="font-medium text-blue-800">Información del Ítem</h3>
-        <p className="mt-1 text-sm text-blue-700">
-          {item.item_inventario_nombre} en {item.equipo_nombre}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-800">
+        <p className="font-medium">Información del ítem:</p>
+        <ul className="mt-2 list-inside list-disc">
+          <li>Equipo: {item.equipo_nombre}</li>
+          <li>Ítem: {item.item_inventario_nombre}</li>
+          <li>
+            Uso actual: {item.uso_acumulado} de {item.vida_util_maxima} {item.unidad_de_uso} (
+            {item.porcentaje_uso.toFixed(1)}%)
+          </li>
+        </ul>
+        <p className="mt-2">
+          Al registrar este mantenimiento, se reiniciará el contador de uso para este ítem en este equipo.
         </p>
-        <p className="mt-1 text-sm text-blue-700">Unidad de uso: {item.unidad_de_uso}</p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="fecha">Fecha de Mantenimiento</Label>
-        <Input id="fecha" name="fecha" type="date" defaultValue={new Date().toISOString().split("T")[0]} required />
-      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="fecha">Fecha de Mantenimiento</Label>
+          <Input id="fecha" name="fecha" type="date" defaultValue={new Date().toISOString().split("T")[0]} required />
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="responsable">Responsable</Label>
-        <Input id="responsable" name="responsable" required placeholder="Nombre del técnico responsable" />
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="responsable">Responsable</Label>
+          <Input id="responsable" name="responsable" required placeholder="Nombre del técnico o responsable" />
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="comentarios">Comentarios</Label>
-        <Textarea id="comentarios" name="comentarios" placeholder="Detalles del mantenimiento realizado" rows={3} />
+        <div className="space-y-2">
+          <Label htmlFor="comentarios">Detalles del Mantenimiento</Label>
+          <Textarea
+            id="comentarios"
+            name="comentarios"
+            placeholder="Describa las acciones realizadas durante el mantenimiento"
+            rows={3}
+            required
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2">
@@ -92,7 +116,7 @@ export function MaintenanceForm({ item, onClose, onSuccess }: MaintenanceFormPro
           Cancelar
         </Button>
         <Button type="submit" className="bg-optilab-blue hover:bg-optilab-blue/90" disabled={isSubmitting}>
-          {isSubmitting ? "Registrando..." : "Registrar Mantenimiento"}
+          {isSubmitting ? "Procesando..." : "Registrar Mantenimiento"}
         </Button>
       </div>
     </form>

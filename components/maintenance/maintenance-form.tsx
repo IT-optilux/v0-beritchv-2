@@ -3,122 +3,101 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import type { Maintenance, Machine } from "@/types"
+import { createMaintenance, updateMaintenance } from "@/app/actions/maintenance"
+import { getMachines } from "@/app/actions/machines"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { maintenanceService, machineService, notificationService } from "@/lib/firebase-services"
-import type { Machine } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
 interface MaintenanceFormProps {
-  machines?: Machine[]
-  initialMachineId?: string | null
-  initialDate?: string
-  onSuccess: () => void
-  onCancel?: () => void
+  maintenance?: Maintenance
+  isEditing?: boolean
+  onClose?: () => void
+  onSuccess?: () => void
 }
 
-export function MaintenanceForm({
-  machines = [],
-  initialMachineId = null,
-  initialDate,
-  onSuccess,
-  onCancel,
-}: MaintenanceFormProps) {
+export function MaintenanceForm({ maintenance, isEditing = false, onClose, onSuccess }: MaintenanceFormProps) {
+  const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(initialMachineId)
-  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null)
-  const [formData, setFormData] = useState({
-    maintenanceType: "Preventivo",
-    description: "",
-    startDate: initialDate || new Date().toISOString().split("T")[0],
-    endDate: "",
-    status: "Programado",
-    technician: "",
-    cost: "",
-    observations: "",
-  })
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [selectedMachineId, setSelectedMachineId] = useState<string>(maintenance?.machineId.toString() || "")
+  const [selectedMachineName, setSelectedMachineName] = useState<string>(maintenance?.machineName || "")
 
   useEffect(() => {
-    if (selectedMachineId && machines.length > 0) {
-      const machine = machines.find((m) => m.id === selectedMachineId)
-      setSelectedMachine(machine || null)
+    const fetchMachines = async () => {
+      try {
+        const machinesData = await getMachines()
+        setMachines(machinesData)
+
+        if (maintenance?.machineId) {
+          const machine = machinesData.find((m) => m.id === maintenance.machineId)
+          if (machine) {
+            setSelectedMachineName(machine.name)
+          }
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las máquinas.",
+          variant: "destructive",
+        })
+      }
     }
-  }, [selectedMachineId, machines])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    fetchMachines()
+  }, [maintenance?.machineId, toast])
 
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleMachineChange = (machineId: string) => {
-    setSelectedMachineId(machineId)
+  const handleMachineChange = (value: string) => {
+    setSelectedMachineId(value)
+    const machine = machines.find((m) => m.id === Number(value))
+    if (machine) {
+      setSelectedMachineName(machine.name)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setIsSubmitting(true)
 
-    if (!selectedMachineId || !selectedMachine) {
-      toast({
-        title: "Error",
-        description: "Debes seleccionar un equipo",
-        variant: "destructive",
-      })
-      return
-    }
+    const formData = new FormData(e.currentTarget)
+    formData.append("machineName", selectedMachineName)
 
     try {
-      setIsSubmitting(true)
+      const result = isEditing ? await updateMaintenance(formData) : await createMaintenance(formData)
 
-      // Create maintenance record
-      const maintenanceData = {
-        machineId: Number(selectedMachineId),
-        machineName: selectedMachine.name,
-        maintenanceType: formData.maintenanceType,
-        description: formData.description,
-        startDate: formData.startDate,
-        endDate: formData.endDate || null,
-        status: formData.status,
-        technician: formData.technician,
-        cost: formData.cost ? Number(formData.cost) : null,
-        observations: formData.observations,
+      if (result.success) {
+        toast({
+          title: "Éxito",
+          description: result.message,
+        })
+
+        if (onSuccess) {
+          onSuccess()
+        }
+
+        if (onClose) {
+          onClose()
+        } else {
+          router.push("/dashboard/maintenance")
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive",
+        })
       }
-
-      await maintenanceService.create(maintenanceData)
-
-      // Update machine's nextMaintenance date
-      await machineService.update(selectedMachineId, {
-        nextMaintenance: formData.startDate,
-      })
-
-      // Create notification
-      await notificationService.create({
-        type: "maintenance",
-        title: "Mantenimiento programado",
-        message: `Se ha programado un mantenimiento ${formData.maintenanceType.toLowerCase()} para ${selectedMachine.name} el ${new Date(formData.startDate).toLocaleDateString()}`,
-        severity: "medium",
-        relatedId: selectedMachineId,
-        read: false,
-      })
-
-      toast({
-        title: "Éxito",
-        description: "Mantenimiento programado correctamente",
-      })
-
-      onSuccess()
     } catch (error) {
-      console.error("Error creating maintenance:", error)
       toast({
         title: "Error",
-        description: "No se pudo programar el mantenimiento",
+        description: "Ha ocurrido un error al procesar la solicitud.",
         variant: "destructive",
       })
     } finally {
@@ -128,20 +107,18 @@ export function MaintenanceForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-4">
+      {isEditing && <input type="hidden" name="id" value={maintenance?.id} />}
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="machineId">Equipo</Label>
-          <Select
-            value={selectedMachineId || ""}
-            onValueChange={handleMachineChange}
-            disabled={!!initialMachineId || isSubmitting}
-          >
+          <Select name="machineId" value={selectedMachineId} onValueChange={handleMachineChange} required>
             <SelectTrigger>
-              <SelectValue placeholder="Selecciona un equipo" />
+              <SelectValue placeholder="Seleccionar equipo" />
             </SelectTrigger>
             <SelectContent>
               {machines.map((machine) => (
-                <SelectItem key={machine.id} value={machine.id}>
+                <SelectItem key={machine.id} value={machine.id.toString()}>
                   {machine.name} ({machine.model})
                 </SelectItem>
               ))}
@@ -151,13 +128,9 @@ export function MaintenanceForm({
 
         <div className="space-y-2">
           <Label htmlFor="maintenanceType">Tipo de Mantenimiento</Label>
-          <Select
-            value={formData.maintenanceType}
-            onValueChange={(value) => handleSelectChange("maintenanceType", value)}
-            disabled={isSubmitting}
-          >
+          <Select name="maintenanceType" defaultValue={maintenance?.maintenanceType || "Preventivo"}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecciona un tipo" />
+              <SelectValue placeholder="Seleccionar tipo" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Preventivo">Preventivo</SelectItem>
@@ -168,114 +141,101 @@ export function MaintenanceForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="description">Descripción</Label>
-          <Textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Describe el mantenimiento a realizar"
-            rows={3}
+          <Label htmlFor="startDate">Fecha de Inicio</Label>
+          <Input
+            id="startDate"
+            name="startDate"
+            type="date"
+            defaultValue={maintenance?.startDate || new Date().toISOString().split("T")[0]}
             required
-            disabled={isSubmitting}
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="startDate">Fecha de Inicio</Label>
-            <Input
-              id="startDate"
-              name="startDate"
-              type="date"
-              value={formData.startDate}
-              onChange={handleChange}
-              required
-              disabled={isSubmitting}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="endDate">Fecha de Finalización (opcional)</Label>
-            <Input
-              id="endDate"
-              name="endDate"
-              type="date"
-              value={formData.endDate}
-              onChange={handleChange}
-              disabled={isSubmitting}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="status">Estado</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => handleSelectChange("status", value)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Programado">Programado</SelectItem>
-                <SelectItem value="En proceso">En proceso</SelectItem>
-                <SelectItem value="Completado">Completado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="technician">Técnico Responsable</Label>
-            <Input
-              id="technician"
-              name="technician"
-              value={formData.technician}
-              onChange={handleChange}
-              placeholder="Nombre del técnico"
-              required
-              disabled={isSubmitting}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="cost">Costo Estimado (opcional)</Label>
-            <Input
-              id="cost"
-              name="cost"
-              type="number"
-              value={formData.cost}
-              onChange={handleChange}
-              placeholder="0.00"
-              disabled={isSubmitting}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="endDate">Fecha de Finalización</Label>
+          <Input
+            id="endDate"
+            name="endDate"
+            type="date"
+            defaultValue={maintenance?.endDate}
+            placeholder="Dejar en blanco si aún no ha finalizado"
+          />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="observations">Observaciones (opcional)</Label>
-          <Textarea
-            id="observations"
-            name="observations"
-            value={formData.observations}
-            onChange={handleChange}
-            placeholder="Observaciones adicionales"
-            rows={3}
-            disabled={isSubmitting}
+          <Label htmlFor="status">Estado</Label>
+          <Select name="status" defaultValue={maintenance?.status || "Programado"}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Programado">Programado</SelectItem>
+              <SelectItem value="En proceso">En proceso</SelectItem>
+              <SelectItem value="Completado">Completado</SelectItem>
+              <SelectItem value="Cancelado">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="technician">Técnico Responsable</Label>
+          <Input
+            id="technician"
+            name="technician"
+            defaultValue={maintenance?.technician}
+            required
+            placeholder="Nombre del técnico"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cost">Costo (opcional)</Label>
+          <Input
+            id="cost"
+            name="cost"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={maintenance?.cost}
+            placeholder="Costo total del mantenimiento"
           />
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="description">Descripción</Label>
+        <Textarea
+          id="description"
+          name="description"
+          defaultValue={maintenance?.description}
+          placeholder="Descripción detallada del mantenimiento"
+          rows={3}
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="observations">Observaciones</Label>
+        <Textarea
+          id="observations"
+          name="observations"
+          defaultValue={maintenance?.observations}
+          placeholder="Observaciones adicionales (opcional)"
+          rows={3}
+        />
+      </div>
+
       <div className="flex justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-            Cancelar
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose || (() => router.push("/dashboard/maintenance"))}
+          disabled={isSubmitting}
+        >
+          Cancelar
+        </Button>
         <Button type="submit" className="bg-optilab-blue hover:bg-optilab-blue/90" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando..." : "Guardar Mantenimiento"}
+          {isSubmitting ? "Guardando..." : isEditing ? "Actualizar Mantenimiento" : "Crear Mantenimiento"}
         </Button>
       </div>
     </form>

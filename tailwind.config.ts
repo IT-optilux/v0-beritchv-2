@@ -1,14 +1,15 @@
 import type { Config } from "tailwindcss"
 
-const config: Config = {
+const config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
+  prefix: "",
   theme: {
     container: {
       center: true,
@@ -24,14 +25,12 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        "optilab-blue": "#003366",
-        "optilab-light": "#0066cc",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
+          DEFAULT: "#003366", // Azul oscuro de la empresa
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
+          DEFAULT: "#00bfff", // Celeste de la empresa (completé el valor)
           foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
@@ -54,6 +53,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Colores personalizados de la empresa
+        "optilab-blue": "#003366",
+        "optilab-light": "#00bfff",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -77,6 +79,6 @@ const config: Config = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-}
+} satisfies Config
 
 export default config
